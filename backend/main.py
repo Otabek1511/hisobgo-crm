@@ -154,9 +154,9 @@ class ForcePasswordChangeRequest(BaseModel):
 
 
 class ProductIn(BaseModel):
-    sku: str = Field(min_length=1, max_length=64)
+    sku: str = Field(default="", max_length=64)  # ixtiyoriy; bo'sh bo'lsa avtomatik yaratiladi
     name: str = Field(min_length=1, max_length=160)
-    category: str = Field(min_length=1, max_length=80)
+    category: str = Field(default="", max_length=80)  # ixtiyoriy
     cost_uzs: int = Field(ge=0, le=10**12)
     price_uzs: int = Field(ge=0, le=10**12)
     stock_qty: int = Field(default=0, ge=0, le=10**7)
@@ -448,10 +448,13 @@ def list_products(store: StoreTenant = Depends(current_store), db: Session = Dep
 
 @app.post("/api/store/products", status_code=201)
 def create_product(payload: ProductIn, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
-    exists = db.scalar(select(Product).where(Product.store_id == store.id, Product.sku == payload.sku))
+    data = payload.model_dump()
+    data["sku"] = data["sku"].strip() or "P-" + secrets.token_hex(4).upper()
+    data["category"] = data["category"].strip() or "Umumiy"
+    exists = db.scalar(select(Product).where(Product.store_id == store.id, Product.sku == data["sku"]))
     if exists:
         raise HTTPException(status_code=400, detail="Bu SKU/shtrixkod allaqachon mavjud")
-    p = Product(store_id=store.id, **payload.model_dump())
+    p = Product(store_id=store.id, **data)
     db.add(p)
     db.commit()
     return product_out(p)
