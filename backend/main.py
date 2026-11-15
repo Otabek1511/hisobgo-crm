@@ -7,7 +7,7 @@ from typing import Literal
 
 import jwt
 import pyotp
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import BackgroundTasks, Body, Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pwdlib import PasswordHash
 from pydantic import BaseModel, Field
@@ -15,7 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from db import engine, get_db
-from models import Base, Customer, Product, SaleReceipt, SecurityAuditLog, StoreTenant
+import telegram_bot as tg
+from models import Base, Customer, Product, SaleItem, SaleReceipt, SecurityAuditLog, StoreTenant, TelegramLink
 
 # ---------------------------------------------------------------------------
 # Sozlamalar
@@ -41,6 +42,8 @@ JWT_TTL_HOURS = int(os.getenv("JWT_TTL_HOURS", "12"))
 MAX_FAILED_LOGINS = 5
 LOCK_MINUTES = 15
 CASHBACK_RATE_PCT = 3
+PUBLIC_URL = os.getenv("PUBLIC_URL", "https://hisobgo-api.onrender.com")
+CRON_KEY = os.getenv("CRON_KEY", "")
 
 pwd_hasher = PasswordHash.recommended()  # Argon2id
 _DUMMY_HASH = pwd_hasher.hash("dummy-password-for-timing")  # mavjud bo'lmagan login uchun vaqt tenglashtirish
@@ -507,7 +510,12 @@ def pay_customer_debt(
 # Savdo (POS): narx va qoldiq serverda hisoblanadi, bitta tranzaksiyada
 # ---------------------------------------------------------------------------
 @app.post("/api/store/sales", status_code=201)
-def create_sale(payload: SaleRequest, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+def create_sale(
+    payload: SaleRequest,
+    background: BackgroundTasks,
+    store: StoreTenant = Depends(current_store),
+    db: Session = Depends(get_db),
+):
     # Bir xil SKU takrorlansa birlashtiriladi; deadlock oldini olish uchun tartiblanadi
     qty_by_sku: dict[str, int] = {}
     for it in payload.items:
@@ -536,6 +544,7 @@ def create_sale(payload: SaleRequest, store: StoreTenant = Depends(current_store
 
     subtotal = cost_total = 0
     parts: list[str] = []
+    sold: list[tuple[Product, int]] = []
     for sku, qty in qty_by_sku.items():
         p = by_sku[sku]
         if p.stock_qty < qty:
@@ -543,6 +552,7 @@ def create_sale(payload: SaleRequest, store: StoreTenant = Depends(current_store
         subtotal += p.price_uzs * qty
         cost_total += p.cost_uzs * qty
         parts.append(f"{p.name} x{qty}")
+        sold.append((p, qty))
     for sku, qty in qty_by_sku.items():
         by_sku[sku].stock_qty -= qty
 
@@ -567,7 +577,20 @@ def create_sale(payload: SaleRequest, store: StoreTenant = Depends(current_store
         profit_uzs=profit,
     )
     db.add(receipt)
+    db.flush()  # receipt.id kerak
+    for p, qty in sold:
+        db.add(SaleItem(receipt_id=receipt.id, store_id=store.id, sku=p.sku, name=p.name, qty=qty, line_total_uzs=p.price_uzs * qty))
     db.commit()
+
+    # Omborga xabar: sotuv javobini kechiktirmaslik uchun fon vazifasi
+    background.add_task(tg.notify_sale, store.id, {
+        "receipt_code": receipt.receipt_code,
+        "time": datetime.now(tg.TZ).strftime("%H:%M"),
+        "customer": receipt.customer_name,
+        "payment_method": receipt.payment_method,
+        "total": total,
+        "lines": [{"name": p.name, "qty": qty, "stock_left": p.stock_qty} for p, qty in sold],
+    })
     return receipt_out(receipt)
 
 
@@ -597,3 +620,102 @@ def dashboard(store: StoreTenant = Depends(current_store), db: Session = Depends
         "customer_count": len(customers),
         "low_stock": [product_out(p) for p in products if p.stock_qty <= 10],
     }
+
+
+# ---------------------------------------------------------------------------
+# Telegram botlar
+# ---------------------------------------------------------------------------
+BotName = Literal["sales", "report"]
+
+
+@app.post("/api/telegram/{bot}")
+def telegram_webhook(
+    bot: BotName,
+    update: dict = Body(...),
+    x_telegram_bot_api_secret_token: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    secret = tg.WEBHOOK_SECRET
+    if not secret or not x_telegram_bot_api_secret_token or not secrets.compare_digest(
+        x_telegram_bot_api_secret_token.encode(), secret.encode()
+    ):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        tg.handle_update(db, bot, update)
+    except Exception:  # Telegram qayta-qayta yubormasligi uchun har doim 200
+        db.rollback()
+    return {"ok": True}
+
+
+@app.post("/api/superadmin/telegram/setup", dependencies=[Depends(require_superadmin)])
+def telegram_setup():
+    return tg.setup_webhooks(PUBLIC_URL)
+
+
+@app.post("/api/internal/daily-report")
+def cron_daily_report(x_cron_key: str | None = Header(default=None), db: Session = Depends(get_db)):
+    """Har kuni 20:00 (Toshkent) tashqi jadval (GitHub Actions) chaqiradi."""
+    if not CRON_KEY:
+        raise HTTPException(status_code=503, detail="CRON_KEY o'rnatilmagan")
+    if not x_cron_key or not secrets.compare_digest(x_cron_key.encode(), CRON_KEY.encode()):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return tg.send_daily_reports(db)
+
+
+def _bot_state(db: Session, store: StoreTenant, bot: str) -> dict:
+    links = tg.chats_for(db, store.id, bot)
+    return {
+        "configured": tg.configured(bot),
+        "username": tg.bot_username(bot) if tg.configured(bot) else None,
+        "links": [{"id": l.id, "chat_title": l.chat_title, "created_at": l.created_at} for l in links],
+    }
+
+
+@app.get("/api/store/bots")
+def store_bots(store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    return {bot: _bot_state(db, store, bot) for bot in tg.BOTS}
+
+
+@app.post("/api/store/bots/{bot}/link-code")
+def store_bot_link_code(bot: BotName, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    if not tg.configured(bot):
+        raise HTTPException(status_code=503, detail="Bu bot hali sozlanmagan (administrator tokenni kiritishi kerak)")
+    username = tg.bot_username(bot)
+    if not username:
+        raise HTTPException(status_code=503, detail="Telegram bilan bog'lanib bo'lmadi, birozdan keyin urinib ko'ring")
+    code = tg.new_link_code(db, store.id, bot)
+    return {
+        "code": code,
+        "expires_in_min": tg.CODE_TTL_MIN,
+        "username": username,
+        "link": f"https://t.me/{username}?start={code}",
+        "group_link": f"https://t.me/{username}?startgroup={code}",
+    }
+
+
+@app.delete("/api/store/bots/links/{link_id}")
+def store_bot_unlink(link_id: int, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    link = db.scalar(select(TelegramLink).where(TelegramLink.id == link_id, TelegramLink.store_id == store.id))
+    if not link:
+        raise HTTPException(status_code=404, detail="Ulanish topilmadi")
+    db.delete(link)
+    db.commit()
+    return {"deleted": True}
+
+
+@app.post("/api/store/bots/{bot}/test")
+def store_bot_test(bot: BotName, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    links = tg.chats_for(db, store.id, bot)
+    if not links:
+        raise HTTPException(status_code=400, detail="Avval botni ulang")
+    if bot == "sales":
+        text = tg.sale_message(store.name, {
+            "receipt_code": "CHK-TEST", "time": datetime.now(tg.TZ).strftime("%H:%M"), "customer": "Sinov",
+            "payment_method": "Naqd", "total": 0, "lines": [{"name": "Sinov xabari", "qty": 1, "stock_left": 99}],
+        })
+    else:
+        text = tg.build_daily_report(db, store, tg.today_local())
+    sent = sum(1 for l in links if tg.send(bot, l.chat_id, text))
+    if not sent:
+        raise HTTPException(status_code=502, detail="Xabar yuborilmadi. Bot sozlamalari yoki chat ulanishini tekshiring")
+    return {"sent": sent}

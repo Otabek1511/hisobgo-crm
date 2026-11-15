@@ -85,6 +85,7 @@
         <button type="button" data-tab="inventory" class="crm-tab px-4 py-2.5 text-sm whitespace-nowrap">📦 Tovarlar</button>
         <button type="button" data-tab="customers" class="crm-tab px-4 py-2.5 text-sm whitespace-nowrap">👥 Mijozlar va nasiya</button>
         <button type="button" data-tab="receipts" class="crm-tab px-4 py-2.5 text-sm whitespace-nowrap">🧾 Cheklar</button>
+        <button type="button" data-tab="bots" class="crm-tab px-4 py-2.5 text-sm whitespace-nowrap">🤖 Botlar</button>
       </div>
     </div>
 
@@ -161,6 +162,18 @@
             </tr></thead>
             <tbody id="custBody" class="divide-y divide-slate-200"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- Botlar -->
+      <div id="tab-bots" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+          <div><h3 class="font-bold">🛒 Sotuv boti (omborga)</h3><p class="text-xs text-slate-500 mt-1">Har bir sotuvda omborchiga xabar boradi: qaysi tovardan nechta sotildi va omborda nechta qoldi.</p></div>
+          <div id="botSales"></div>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+          <div><h3 class="font-bold">📊 Hisobot boti (egasiga)</h3><p class="text-xs text-slate-500 mt-1">Har kuni soat 20:00 da kunlik savdo hisoboti boradi. Botga <span class="mono">/hisobot</span> yozib istalgan vaqtda ham olish mumkin.</p></div>
+          <div id="botReport"></div>
         </div>
       </div>
 
@@ -397,13 +410,14 @@
 
     function switchTab(tab) {
       S.tab = tab;
-      ["dashboard", "pos", "inventory", "customers", "receipts"].forEach(function (t) {
+      ["dashboard", "pos", "inventory", "customers", "receipts", "bots"].forEach(function (t) {
         $("tab-" + t).classList.toggle("hidden", t !== tab);
       });
       document.querySelectorAll(".crm-tab").forEach(function (b) {
         var on = b.getAttribute("data-tab") === tab;
         b.className = "crm-tab px-4 py-2.5 text-sm whitespace-nowrap border-b-2 " + (on ? "border-indigo-600 text-indigo-600 font-bold" : "border-transparent text-slate-600 hover:text-slate-900 font-semibold");
       });
+      if (tab === "bots" && S.me) loadBots();
     }
 
     function renderAll() { renderDashboard(); renderPos(); renderInventory(); renderCustomers(); renderReceipts(); }
@@ -477,6 +491,47 @@
       }).join("") : '<tr><td colspan="6" class="py-8 text-center text-slate-400 text-xs">Hozircha cheklar yo\'q.</td></tr>';
     }
 
+    // ----- Botlar -----
+    var BOT_BOX = { sales: "botSales", report: "botReport" };
+    var codes = {};   // bot -> oxirgi olingan kod ma'lumoti
+
+    function loadBots() {
+      storeApi("GET", "/api/store/bots").then(function (b) { S.bots = b; renderBots(); }).catch(fail);
+    }
+
+    function renderBots() {
+      ["sales", "report"].forEach(function (bot) {
+        var st = (S.bots || {})[bot], box = $(BOT_BOX[bot]);
+        if (!st) { box.innerHTML = ""; return; }
+        if (!st.configured) {
+          box.innerHTML = '<div class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">Bu bot hali sozlanmagan. Administratorga murojaat qiling.</div>';
+          return;
+        }
+        var links = st.links.length ? st.links.map(function (l) {
+          return '<div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs"><span>✅ ' + esc(l.chat_title) + '</span><button type="button" data-unlink="' + esc(l.id) + '" class="px-2 py-1 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 font-semibold">O\'chirish</button></div>';
+        }).join("") : '<div class="text-xs text-slate-400">Hali hech kim ulanmagan.</div>';
+        var c = codes[bot], codeHtml = "";
+        if (c) {
+          codeHtml = '<div class="p-3 rounded-xl bg-indigo-50 border border-indigo-200 text-xs space-y-1.5"><div><b>1-usul (shaxsiy chat):</b> <a class="text-indigo-700 underline" target="_blank" rel="noopener" href="' + esc(c.link) + '">Telegram\'da ochish</a></div><div><b>2-usul (guruh):</b> <a class="text-indigo-700 underline" target="_blank" rel="noopener" href="' + esc(c.group_link) + '">Guruhga qo\'shish</a></div><div>Yoki botga qo\'lda yozing: <span class="mono font-bold">/start ' + esc(c.code) + '</span></div><div class="text-slate-500">Kod ' + esc(c.expires_in_min) + ' daqiqa amal qiladi va bir marta ishlaydi.</div></div>';
+        }
+        box.innerHTML = '<div class="space-y-2">' + links + '</div><div class="flex flex-wrap gap-2 pt-1"><button type="button" data-linkcode="' + bot + '" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">+ Ulash</button>' + (st.links.length ? '<button type="button" data-bottest="' + bot + '" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold">📨 Test xabar</button>' : '') + '</div>' + codeHtml;
+      });
+    }
+
+    function onBotsClick(e) {
+      var b;
+      if ((b = e.target.closest("[data-linkcode]"))) {
+        var bot = b.getAttribute("data-linkcode");
+        storeApi("POST", "/api/store/bots/" + bot + "/link-code").then(function (r) { codes[bot] = r; renderBots(); }).catch(fail);
+      } else if ((b = e.target.closest("[data-unlink]"))) {
+        if (!confirm("Bu chat uzilsinmi? Unga xabar kelmay qoladi.")) return;
+        storeApi("DELETE", "/api/store/bots/links/" + b.getAttribute("data-unlink")).then(loadBots).catch(fail);
+      } else if ((b = e.target.closest("[data-bottest]"))) {
+        storeApi("POST", "/api/store/bots/" + b.getAttribute("data-bottest") + "/test")
+          .then(function (r) { toast("Test xabar yuborildi (" + r.sent + " ta chat).", "info"); }).catch(fail);
+      }
+    }
+
     function completeSale() {
       if (!S.cart.length) { toast("Savat bo'sh!", "error"); return; }
       var cid = $("posCustomer").value;
@@ -535,6 +590,9 @@
         if (dec) { it.qty--; if (it.qty <= 0) S.cart = S.cart.filter(function (i) { return i.sku !== sku; }); }
         renderCart();
       });
+
+      // Botlar
+      $("tab-bots").addEventListener("click", onBotsClick);
 
       // Tovarlar
       $("btnAddProduct").addEventListener("click", function () { modal("modalProduct", true); });

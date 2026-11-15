@@ -57,6 +57,15 @@
         <button id="btnNewStore" type="button" class="px-4 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-sm font-semibold">➕ Yangi do'kon</button>
       </div>
 
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div class="font-bold text-sm">🤖 Telegram botlar</div>
+          <div class="text-xs text-slate-500">Tokenlarni Render'ga kiritgandan keyin webhooklarni ulash uchun bir marta bosing.</div>
+        </div>
+        <button id="btnTgSetup" type="button" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">Webhooklarni sozlash</button>
+      </div>
+      <div id="tgResult" class="hidden text-xs space-y-1"></div>
+
       <div id="otpBox" class="hidden bg-amber-50 border border-amber-300 rounded-2xl p-4 text-sm">
         <div class="font-bold text-amber-900">Bir martalik parol — faqat hozir ko'rsatiladi!</div>
         <div class="mono mt-2 text-amber-950">Login: <b id="otpLogin"></b> &nbsp; Parol: <b id="otpValue"></b></div>
@@ -247,6 +256,16 @@
         }).then(function (r) {
           modal("modalStore", false); $("formStore").reset();
           showOtp(r.login, r.one_time_password); loadSuper();
+        }).catch(fail);
+      });
+      $("btnTgSetup").addEventListener("click", function () {
+        superApi("POST", "/api/superadmin/telegram/setup").then(function (r) {
+          $("tgResult").innerHTML = ["sales", "report"].map(function (b) {
+            var x = r[b] || {};
+            var label = b === "sales" ? "Sotuv boti" : "Hisobot boti";
+            return '<div class="p-2.5 rounded-xl border ' + (x.ok ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-800") + '">' + label + ": " + (x.ok ? "✅ ulandi" + (x.username ? " (@" + esc(x.username) + ")" : "") : "❌ " + esc(x.error || "xato")) + "</div>";
+          }).join("");
+          $("tgResult").classList.remove("hidden");
         }).catch(fail);
       });
       $("btnHideOtp").addEventListener("click", function () { $("otpBox").classList.add("hidden"); $("otpValue").textContent = ""; });

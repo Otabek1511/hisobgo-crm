@@ -4,6 +4,10 @@ from datetime import date, timedelta
 
 os.environ["ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite:///./test_hisobgo.db"
+os.environ["SALES_BOT_TOKEN"] = "111:test-sales"
+os.environ["REPORT_BOT_TOKEN"] = "222:test-report"
+os.environ["TELEGRAM_WEBHOOK_SECRET"] = "whsecret"
+os.environ["CRON_KEY"] = "cronkey"
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from fastapi.testclient import TestClient  # noqa: E402
@@ -52,3 +56,36 @@ def test_full_flow():
         c.patch("/api/superadmin/stores/shop1/block", headers=SA)
         assert c.get("/api/store/products", headers=H).status_code == 403
         c.delete("/api/superadmin/stores/shop1", headers=SA)
+
+
+def test_telegram_flow(monkeypatch):
+    import telegram_bot as tg
+
+    sent = []
+    monkeypatch.setattr(tg, "send", lambda bot, chat_id, text: sent.append((bot, chat_id, text)) or True)
+    monkeypatch.setattr(tg, "bot_username", lambda bot: f"test_{bot}_bot")
+
+    with TestClient(app) as c:
+        otp = c.post("/api/superadmin/stores", json=_store_payload("shop2"), headers=SA).json()["one_time_password"]
+        c.post("/api/auth/change-initial-password", json={"login": "shop2", "one_time_password": otp, "new_strong_password": STRONG})
+        token = c.post("/api/auth/login", json={"login": "shop2", "password": STRONG}).json()["access_token"]
+        H = {"Authorization": f"Bearer {token}"}
+
+        # webhook sirsiz rad etiladi
+        assert c.post("/api/telegram/sales", json={}).status_code == 403
+
+        # ulash kodi -> /start KOD
+        code = c.post("/api/store/bots/sales/link-code", headers=H).json()["code"]
+        upd = {"message": {"text": f"/start {code}", "chat": {"id": 555, "first_name": "Omborchi"}}}
+        assert c.post("/api/telegram/sales", json=upd, headers={"X-Telegram-Bot-Api-Secret-Token": "whsecret"}).status_code == 200
+        assert len(c.get("/api/store/bots", headers=H).json()["sales"]["links"]) == 1
+
+        # sotuv -> ombor xabari
+        c.post("/api/store/products", headers=H, json={"name": "Non", "cost_uzs": 1000, "price_uzs": 2000, "stock_qty": 3})
+        sku = c.get("/api/store/products", headers=H).json()[0]["sku"]
+        assert c.post("/api/store/sales", headers=H, json={"items": [{"sku": sku, "qty": 2}], "payment_method": "Naqd"}).status_code == 201
+        assert any(b == "sales" and chat == 555 and "Non" in t for b, chat, t in sent)
+
+        # cron kalitsiz rad etiladi
+        assert c.post("/api/internal/daily-report").status_code == 403
+        c.delete("/api/superadmin/stores/shop2", headers=SA)

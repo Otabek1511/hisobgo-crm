@@ -98,3 +98,42 @@ class SecurityAuditLog(Base):
     action: Mapped[str] = mapped_column(String(64), nullable=False)
     detail: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SaleItem(Base):
+    """Chekdagi har bir tovar qatori (hisobotlarda 'eng ko'p sotilgan' uchun)."""
+
+    __tablename__ = "sale_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    receipt_id: Mapped[int] = mapped_column(ForeignKey("sale_receipts.id", ondelete="CASCADE"), index=True, nullable=False)
+    store_id: Mapped[str] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True, nullable=False)
+    sku: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    line_total_uzs: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+
+class TelegramLink(Base):
+    """Telegram chat (shaxsiy yoki guruh) ning do'kon va bot turiga ulanishi."""
+
+    __tablename__ = "telegram_links"
+    __table_args__ = (UniqueConstraint("store_id", "bot", "chat_id", name="uq_tg_store_bot_chat"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    store_id: Mapped[str] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True, nullable=False)
+    bot: Mapped[str] = mapped_column(String(10), nullable=False)  # sales | report
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
+    chat_title: Mapped[str] = mapped_column(String(160), default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LinkCode(Base):
+    """Botni ulash uchun bir martalik, qisqa muddatli kod."""
+
+    __tablename__ = "telegram_link_codes"
+
+    code: Mapped[str] = mapped_column(String(16), primary_key=True)
+    store_id: Mapped[str] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True, nullable=False)
+    bot: Mapped[str] = mapped_column(String(10), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

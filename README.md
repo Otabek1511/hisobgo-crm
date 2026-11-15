@@ -37,6 +37,16 @@ docker compose up --build
 | Autentifikatsiya | `/api/auth/login`, `/api/auth/change-initial-password` (5 ta xato urinishdan keyin 15 daqiqa blok) |
 | Do'kon (Bearer JWT, har so'rovda status/obuna tekshiriladi) | `/api/store/products`, `/customers`, `/sales`, `/dashboard` |
 
+## Telegram botlar
+
+Ikkita bot (BotFather'da alohida yaratiladi):
+- **Sotuv boti** — har bir sotuvda ulangan omborchi(lar)ga xabar yuboradi (tovar, soni, ombordagi qoldiq; kam qolsa ogohlantirish).
+- **Hisobot boti** — har kuni 20:00 (Toshkent) da egaga kunlik hisobot: cheklar soni, tushum, foyda, to'lov turlari, nasiya, eng ko'p sotilganlar, kam qolgan tovarlar. `/hisobot` buyrug'i bilan istalgan vaqtda olish mumkin.
+
+Sozlash (Render → `hisobgo-api` → Environment): `SALES_BOT_TOKEN`, `REPORT_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_KEY`. Keyin `admin.html` da **Webhooklarni sozlash** tugmasini bosing. Do'kon egasi CRM → **Botlar** bo'limidan bir martalik kod (15 daqiqa) oladi va Telegram'da `/start KOD` yuboradi (shaxsiy chat yoki guruh).
+
+20:00 jadvali: `.github/workflows/daily-report.yml` (GitHub Actions cron). GitHub repo → Settings → Secrets → Actions ga `API_URL` (`https://hisobgo-api.onrender.com`) va `CRON_KEY` (Render'dagi bilan bir xil) qo'shing. GitHub cron bir necha daqiqa kechikishi mumkin.
+
 ## Muhim eslatmalar
 
 - `frontend/index.html` (do'kon egalari) va `frontend/admin.html` (Superadmin, alohida manzil, do'kon sahifasidan havola yo'q) haqiqiy API ga ulangan (Tailwind CDN). API manzili: `localhost` da `http://localhost:8000`, aks holda `https://hisobgo-api.onrender.com` (faylning boshidagi `API` o'zgaruvchisida). Tenant izolyatsiyasi backendda `store_id` filtri orqali amalga oshirilgan; PostgreSQL RLS yoqilmagan.
