@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HisobGo — Superadmin</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+
+  <header class="bg-slate-900 text-white sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center font-extrabold text-lg">H</div>
+        <div>
+          <div class="font-bold text-sm">HisobGo — Superadmin</div>
+          <div id="apiStatus" class="text-[11px] text-slate-400">Server: tekshirilmoqda…</div>
+        </div>
+      </div>
+      <button id="btnLogout" type="button" class="hidden px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-300 hover:bg-slate-700">Chiqish</button>
+    </div>
+  </header>
+
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+  <!-- ============ SUPERADMIN ============ -->
+  <section id="viewSuper" class="flex-1 max-w-7xl w-full mx-auto px-4 py-6 space-y-6">
+    <div id="superGate" class="max-w-md mx-auto w-full bg-white rounded-3xl border border-slate-200 shadow-xl p-6 sm:p-8 space-y-4">
+      <div>
+        <h2 class="text-xl font-bold">Superadmin kirishi</h2>
+        <p class="text-xs text-slate-500 mt-1">Kalit faqat shu sahifa ochiq turganda xotirada saqlanadi.</p>
+      </div>
+      <div id="superError" class="hidden p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium"></div>
+      <form id="formSuper" class="space-y-4">
+        <div>
+          <label for="inSuperKey" class="block text-xs font-semibold mb-1">Superadmin kaliti</label>
+          <input id="inSuperKey" type="password" required autocomplete="off" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm">
+        </div>
+        <div>
+          <label for="inSuperTotp" class="block text-xs font-semibold mb-1">2FA kodi (agar yoqilgan bo'lsa)</label>
+          <input id="inSuperTotp" type="text" inputmode="numeric" maxlength="6" autocomplete="off" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm mono">
+        </div>
+        <button type="submit" class="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm">Kirish →</button>
+      </form>
+    </div>
+
+    <div id="superPanel" class="hidden space-y-6">
+      <div class="bg-slate-900 text-white rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 class="text-xl font-bold">Do'konlar va abonent to'lovlari</h1>
+          <p class="text-xs text-slate-300 mt-1">Yangi do'konga bir martalik parol (OTP) beriladi; egasi birinchi kirishda uni almashtiradi.</p>
+        </div>
+        <button id="btnNewStore" type="button" class="px-4 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-sm font-semibold">➕ Yangi do'kon</button>
+      </div>
+
+      <div id="otpBox" class="hidden bg-amber-50 border border-amber-300 rounded-2xl p-4 text-sm">
+        <div class="font-bold text-amber-900">Bir martalik parol — faqat hozir ko'rsatiladi!</div>
+        <div class="mono mt-2 text-amber-950">Login: <b id="otpLogin"></b> &nbsp; Parol: <b id="otpValue"></b></div>
+        <div class="mt-2 flex gap-2">
+          <button id="btnCopyOtp" type="button" class="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 text-xs font-bold">📋 Nusxalash</button>
+          <button id="btnHideOtp" type="button" class="px-3 py-1.5 rounded-lg border border-amber-400 text-xs font-semibold">Yopish</button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200 overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead><tr class="bg-slate-50 text-slate-600 text-xs uppercase">
+            <th class="py-3 px-4">Do'kon</th><th class="py-3 px-4">Egasi / login</th><th class="py-3 px-4">Tarif</th><th class="py-3 px-4">Parol</th><th class="py-3 px-4">Obuna muddati</th><th class="py-3 px-4">Holat</th><th class="py-3 px-4 text-right">Amallar</th>
+          </tr></thead>
+          <tbody id="storesBody" class="divide-y divide-slate-200"></tbody>
+        </table>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200 p-5">
+        <h3 class="font-bold mb-3">Audit jurnali</h3>
+        <div id="auditList" class="space-y-2 max-h-72 overflow-y-auto text-xs"></div>
+      </div>
+    </div>
+  </section>
+
+  <div id="modalStore" class="hidden fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between"><h3 class="font-bold text-lg">Yangi do'kon</h3><button type="button" data-close="modalStore" class="text-slate-400 hover:text-slate-700 font-bold">✕</button></div>
+      <form id="formStore" class="space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div><label for="nsName" class="block text-xs font-semibold mb-1">Do'kon nomi *</label><input id="nsName" required minlength="2" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></div>
+          <div><label for="nsOwner" class="block text-xs font-semibold mb-1">Egasi F.I.Sh. *</label><input id="nsOwner" required minlength="2" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></div>
+          <div><label for="nsPhone" class="block text-xs font-semibold mb-1">Telefon *</label><input id="nsPhone" required minlength="7" placeholder="+998 90 123 45 67" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></div>
+          <div><label for="nsLogin" class="block text-xs font-semibold mb-1">Login * (3–64, harf/raqam/._-)</label><input id="nsLogin" required pattern="[A-Za-z0-9_.\-]{3,64}" autocapitalize="none" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm mono"></div>
+          <div><label for="nsPlan" class="block text-xs font-semibold mb-1">Tarif *</label><select id="nsPlan" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white"><option>Start</option><option selected>Advanced</option><option>Pro</option></select></div>
+        </div>
+        <div><label for="nsExpiry" class="block text-xs font-semibold mb-1">Abonent muddati *</label><input id="nsExpiry" type="date" required class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" data-close="modalStore" class="px-4 py-2 rounded-xl border border-slate-300 text-xs font-semibold">Bekor qilish</button>
+          <button type="submit" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">Yaratish va OTP olish</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    "use strict";
+    var host = location.hostname;
+    var API = (host === "localhost" || host === "127.0.0.1") ? "http://localhost:8000" : "https://hisobgo-api.onrender.com";
+    var $ = function (id) { return document.getElementById(id); };
+    var PLAN_PRICES = { Start: 239200, Advanced: 399200, Pro: 799200 };
+    var S = { superHeaders: null };
+
+    // ----- Yordamchilar -----
+    function esc(v) {
+      return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    }
+    function uzs(n) { return Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so'm"; }
+    function fmtTime(iso) { try { return new Date(iso).toLocaleString("uz-UZ", { hour12: false }); } catch (e) { return iso; } }
+
+    function toast(msg, type) {
+      var el = document.createElement("div");
+      var bg = type === "error" ? "bg-rose-600 text-white" : type === "warning" ? "bg-amber-500 text-slate-950" : "bg-slate-900 text-white";
+      el.className = "pointer-events-auto px-4 py-3 rounded-xl shadow-xl text-xs font-semibold " + bg;
+      el.textContent = msg;
+      $("toastContainer").appendChild(el);
+      setTimeout(function () { el.remove(); }, 4200);
+    }
+
+    function errText(d) {
+      if (!d) return "Noma'lum xatolik";
+      if (typeof d.detail === "string") return d.detail;
+      if (Array.isArray(d.detail)) return d.detail.map(function (x) { return (x.loc ? x.loc.slice(-1)[0] + ": " : "") + x.msg; }).join("; ");
+      return "Xatolik";
+    }
+
+    // fetch o'rami: JSON, xato matni, uxlab yotgan server haqida xabar
+    function api(method, path, body, headers) {
+      var wake = setTimeout(function () { toast("Server uyg'onmoqda, 30–50 soniya kuting…", "warning"); }, 4000);
+      var h = Object.assign({ "Content-Type": "application/json" }, headers || {});
+      return fetch(API + path, { method: method, headers: h, body: body ? JSON.stringify(body) : undefined })
+        .then(function (r) {
+          return r.text().then(function (t) {
+            var data = null;
+            try { data = t ? JSON.parse(t) : null; } catch (e) {}
+            if (!r.ok) { var err = new Error(errText(data)); err.status = r.status; throw err; }
+            return data;
+          });
+        })
+        .catch(function (e) {
+          if (!e.status) e = Object.assign(new Error("Serverga ulanib bo'lmadi. Internetni tekshiring."), { status: 0 });
+          throw e;
+        })
+        .finally(function () { clearTimeout(wake); });
+    }
+    function superApi(method, path, body) {
+      return api(method, path, body, S.superHeaders).catch(function (e) {
+        if (e.status === 403) { S.superHeaders = null; showSuper(); showSuperError(e.message); }
+        throw e;
+      });
+    }
+    function fail(e) { toast(e.message, "error"); }
+
+    // ----- Superadmin -----
+    function showSuper() {
+      var ok = !!S.superHeaders;
+      $("superGate").classList.toggle("hidden", ok);
+      $("superPanel").classList.toggle("hidden", !ok);
+      $("btnLogout").classList.toggle("hidden", !ok);
+      if (ok) loadSuper();
+    }
+    function showSuperError(msg) {
+      var el = $("superError");
+      if (!msg) { el.classList.add("hidden"); return; }
+      el.textContent = msg; el.classList.remove("hidden");
+    }
+
+    function onSuperLogin(e) {
+      e.preventDefault(); showSuperError("");
+      var h = { "X-Superadmin-Key": $("inSuperKey").value };
+      var t = $("inSuperTotp").value.trim();
+      if (t) h["X-Superadmin-TOTP"] = t;
+      api("GET", "/api/superadmin/stores", null, h).then(function (stores) {
+        S.superHeaders = h;
+        $("inSuperKey").value = ""; $("inSuperTotp").value = "";
+        showSuper(); renderStores(stores);
+      }).catch(function (err) { showSuperError(err.message); });
+    }
+
+    function loadSuper() {
+      superApi("GET", "/api/superadmin/stores").then(renderStores).catch(fail);
+      superApi("GET", "/api/superadmin/audit-logs").then(function (rows) {
+        $("auditList").innerHTML = rows.length ? rows.map(function (r) {
+          return '<div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2"><div><span class="px-2 py-0.5 rounded bg-slate-200 mono font-semibold">' + esc(r.action) + '</span> <span class="ml-1">' + esc(r.actor) + " — " + esc(r.detail) + '</span></div><span class="text-slate-400 mono">' + esc(fmtTime(r.created_at)) + "</span></div>";
+        }).join("") : '<div class="text-slate-400">Hozircha yozuv yo\'q.</div>';
+      }).catch(function () {});
+    }
+
+    function badge(st) {
+      if (st === "ACTIVE") return '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">● FAOL</span>';
+      if (st === "BLOCKED") return '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800">⛔ BLOKLANGAN</span>';
+      return '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">⚠️ MUDDATI O\'TGAN</span>';
+    }
+
+    function renderStores(stores) {
+      $("storesBody").innerHTML = stores.length ? stores.map(function (s) {
+        var l = esc(s.login);
+        return '<tr class="hover:bg-slate-50"><td class="py-3 px-4"><div class="font-bold">' + esc(s.name) + '</div><div class="text-xs text-slate-500 mono">' + esc(s.slug) + (s.tin ? " • STIR: " + esc(s.tin) : "") + '</div></td><td class="py-3 px-4"><div class="font-semibold">' + esc(s.owner_name) + '</div><div class="text-xs text-slate-500">Login: <b class="mono text-indigo-600">' + l + "</b> • " + esc(s.phone) + '</div></td><td class="py-3 px-4"><span class="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-xs">' + esc(s.plan) + '</span><div class="text-[11px] text-slate-500 mt-1">' + uzs(PLAN_PRICES[s.plan] || 0) + "/oy</div></td><td class=\"py-3 px-4 text-xs\">" + (s.must_change_password ? '<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-semibold">🔑 OTP almashtirilmagan</span>' : '<span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">✅ Doimiy parol</span>') + '</td><td class="py-3 px-4"><div class="flex items-center gap-1.5"><input type="date" data-expiry="' + l + '" value="' + esc(s.subscription_expires_at) + '" class="px-2 py-1 rounded-lg border border-slate-300 text-xs mono"><button type="button" data-extend="' + l + '" data-date="' + esc(s.subscription_expires_at) + '" class="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold">+1 oy</button></div></td><td class="py-3 px-4">' + badge(s.status) + '</td><td class="py-3 px-4 text-right"><div class="inline-flex flex-wrap justify-end gap-1.5"><button type="button" data-block="' + l + '" data-to="' + (s.status === "BLOCKED" ? "0" : "1") + '" class="px-2.5 py-1.5 rounded-lg border text-xs font-semibold ' + (s.status === "BLOCKED" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-800 border-amber-200") + '">' + (s.status === "BLOCKED" ? "🔓 Ochish" : "⛔ Bloklash") + '</button><button type="button" data-otp="' + l + '" class="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold">🔑 Yangi OTP</button><button type="button" data-del="' + l + '" class="px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-xs font-semibold">🗑️</button></div></td></tr>';
+      }).join("") : '<tr><td colspan="7" class="py-8 text-center text-slate-400 text-sm">Hozircha do\'kon yo\'q. «Yangi do\'kon» tugmasini bosing.</td></tr>';
+    }
+
+    function showOtp(login, otp) {
+      $("otpLogin").textContent = login; $("otpValue").textContent = otp;
+      $("otpBox").classList.remove("hidden");
+    }
+
+    function addMonth(iso) {
+      var d = new Date(iso + "T00:00:00Z"); if (isNaN(d)) d = new Date();
+      var base = d < new Date() ? new Date() : d;
+      base.setUTCMonth(base.getUTCMonth() + 1);
+      return base.toISOString().slice(0, 10);
+    }
+
+    function modal(id, open) { $(id).classList.toggle("hidden", !open); }
+
+    function init() {
+      $("btnLogout").addEventListener("click", function () { S.superHeaders = null; $("otpBox").classList.add("hidden"); showSuper(); });
+      $("formSuper").addEventListener("submit", onSuperLogin);
+      document.querySelectorAll("[data-close]").forEach(function (b) {
+        b.addEventListener("click", function () { modal(b.getAttribute("data-close"), false); });
+      });
+
+      // Superadmin
+      $("btnNewStore").addEventListener("click", function () {
+        var d = new Date(); d.setMonth(d.getMonth() + 1);
+        $("nsExpiry").value = d.toISOString().slice(0, 10);
+        modal("modalStore", true);
+      });
+      $("formStore").addEventListener("submit", function (e) {
+        e.preventDefault();
+        superApi("POST", "/api/superadmin/stores", {
+          name: $("nsName").value.trim(), owner_name: $("nsOwner").value.trim(),
+          phone: $("nsPhone").value.trim(), login: $("nsLogin").value.trim(), plan: $("nsPlan").value,
+          subscription_expires_at: $("nsExpiry").value
+        }).then(function (r) {
+          modal("modalStore", false); $("formStore").reset();
+          showOtp(r.login, r.one_time_password); loadSuper();
+        }).catch(fail);
+      });
+      $("btnHideOtp").addEventListener("click", function () { $("otpBox").classList.add("hidden"); $("otpValue").textContent = ""; });
+      $("btnCopyOtp").addEventListener("click", function () {
+        var txt = "Login: " + $("otpLogin").textContent + "\nParol: " + $("otpValue").textContent;
+        try { navigator.clipboard.writeText(txt); toast("Nusxalandi.", "info"); } catch (e) { toast("Nusxalab bo'lmadi, qo'lda ko'chiring.", "warning"); }
+      });
+      $("storesBody").addEventListener("change", function (e) {
+        var inp = e.target.closest("[data-expiry]"); if (!inp || !inp.value) return;
+        superApi("PATCH", "/api/superadmin/stores/" + encodeURIComponent(inp.getAttribute("data-expiry")) + "/subscription", { subscription_expires_at: inp.value })
+          .then(function () { toast("Obuna muddati yangilandi.", "info"); loadSuper(); }).catch(fail);
+      });
+      $("storesBody").addEventListener("click", function (e) {
+        var b;
+        if ((b = e.target.closest("[data-extend]"))) {
+          superApi("PATCH", "/api/superadmin/stores/" + encodeURIComponent(b.getAttribute("data-extend")) + "/subscription", { subscription_expires_at: addMonth(b.getAttribute("data-date")) })
+            .then(function () { toast("Obuna +1 oyga uzaytirildi.", "info"); loadSuper(); }).catch(fail);
+        } else if ((b = e.target.closest("[data-block]"))) {
+          var block = b.getAttribute("data-to") === "1";
+          superApi("PATCH", "/api/superadmin/stores/" + encodeURIComponent(b.getAttribute("data-block")) + "/block?block=" + block)
+            .then(function () { toast(block ? "Do'kon bloklandi." : "Do'kon blokdan chiqarildi.", block ? "warning" : "info"); loadSuper(); }).catch(fail);
+        } else if ((b = e.target.closest("[data-otp]"))) {
+          if (!confirm("Yangi OTP berilsa, eski parol ishlamay qoladi. Davom etasizmi?")) return;
+          superApi("POST", "/api/superadmin/stores/" + encodeURIComponent(b.getAttribute("data-otp")) + "/reset-otp")
+            .then(function (r) { showOtp(r.login, r.one_time_password); loadSuper(); }).catch(fail);
+        } else if ((b = e.target.closest("[data-del]"))) {
+          var lg = b.getAttribute("data-del");
+          if (!confirm("«" + lg + "» do'koni va uning BARCHA ma'lumotlari butunlay o'chiriladi. Davom etasizmi?")) return;
+          superApi("DELETE", "/api/superadmin/stores/" + encodeURIComponent(lg))
+            .then(function () { toast("Do'kon o'chirildi.", "error"); loadSuper(); }).catch(fail);
+        }
+      });
+
+      showSuper();
+      api("GET", "/health").then(function () {
+        $("apiStatus").textContent = "Server: ishlayapti ✓";
+      }).catch(function () { $("apiStatus").textContent = "Server: ulanmadi"; });
+    }
+
+    document.addEventListener("DOMContentLoaded", init);
+  })();
+  </script>
+</body>
+</html>

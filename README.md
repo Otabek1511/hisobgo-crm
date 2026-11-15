@@ -24,7 +24,7 @@ cp .env.example .env        # qiymatlarni almashtiring (JWT_SECRET, SUPERADMIN_S
 docker compose up --build
 ```
 
-- Frontend: http://localhost:8080
+- Do'kon egalari paneli: http://localhost:8080  •  Superadmin paneli (alohida sahifa): http://localhost:8080/admin.html
 - API hujjatlari: http://localhost:8000/docs  (`/health` — holat tekshiruvi)
 - Jadvallar birinchi ishga tushishda avtomatik yaratiladi.
 - Lokal sinov: `cd backend && pip install -r requirements-dev.txt && pytest` (`ENV=dev` SQLite ishlatadi).
@@ -39,5 +39,5 @@ docker compose up --build
 
 ## Muhim eslatmalar
 
-- `frontend/index.html` haqiqiy API ga ulangan (bitta fayl, Tailwind CDN). API manzili: `localhost` da `http://localhost:8000`, aks holda `https://hisobgo-api.onrender.com` (faylning boshidagi `API` o'zgaruvchisida). Tenant izolyatsiyasi backendda `store_id` filtri orqali amalga oshirilgan; PostgreSQL RLS yoqilmagan.
+- `frontend/index.html` (do'kon egalari) va `frontend/admin.html` (Superadmin, alohida manzil, do'kon sahifasidan havola yo'q) haqiqiy API ga ulangan (Tailwind CDN). API manzili: `localhost` da `http://localhost:8000`, aks holda `https://hisobgo-api.onrender.com` (faylning boshidagi `API` o'zgaruvchisida). Tenant izolyatsiyasi backendda `store_id` filtri orqali amalga oshirilgan; PostgreSQL RLS yoqilmagan.
 - Production'da `ENV=production` (standart) bo'lib, `JWT_SECRET` va `SUPERADMIN_SECRET_KEY` majburiy; `CORS_ORIGINS` ni frontend manziliga qo'ying.
