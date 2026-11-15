@@ -10,7 +10,9 @@ Chatni ulash: do'kon egasi CRM'dan bir martalik kod oladi, Telegram'da botga
 import html
 import logging
 import os
+import re
 import secrets
+import time as _time
 from datetime import date, datetime, time, timedelta, timezone
 
 import httpx
@@ -24,7 +26,9 @@ log = logging.getLogger("hisobgo.telegram")
 
 TZ = timezone(timedelta(hours=5))  # O'zbekiston (yozgi/qishki vaqt yo'q)
 BOTS = ("sales", "report")
-TOKENS = {"sales": os.getenv("SALES_BOT_TOKEN", ""), "report": os.getenv("REPORT_BOT_TOKEN", "")}
+TOKENS = {"sales": os.getenv("SALES_BOT_TOKEN", "").strip(), "report": os.getenv("REPORT_BOT_TOKEN", "").strip()}
+_TOKEN_RE = re.compile(r"^\d{6,}:[A-Za-z0-9_-]{30,}$")
+_last_error: dict[str, str] = {}
 WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
 CODE_TTL_MIN = 15
 LOW_STOCK = 10
@@ -38,16 +42,34 @@ def configured(bot: str) -> bool:
     return bool(TOKENS.get(bot))
 
 
+def token_format_ok(bot: str) -> bool:
+    return bool(_TOKEN_RE.match(TOKENS.get(bot, "")))
+
+
 def api_call(bot: str, method: str, payload: dict | None = None) -> dict | None:
     token = TOKENS.get(bot)
     if not token:
         return None
-    try:
-        r = httpx.post(f"https://api.telegram.org/bot{token}/{method}", json=payload or {}, timeout=10)
-        data = r.json()
-    except Exception as exc:  # token URL da bo'lgani uchun xabar matnini loglamaymiz
-        log.warning("telegram %s/%s xato: %s", bot, method, type(exc).__name__)
-        return None
+    url = f"https://api.telegram.org/bot{token}/{method}"
+    timeout = httpx.Timeout(20.0, connect=10.0)
+    data = None
+    for attempt in (1, 2):
+        try:
+            r = httpx.post(url, json=payload or {}, timeout=timeout)
+            data = r.json()
+        except Exception as exc:  # token URL da bo'lgani uchun xabar matnini loglamaymiz
+            _last_error[bot] = type(exc).__name__
+            log.warning("telegram %s/%s xato: %s (urinish %d)", bot, method, type(exc).__name__, attempt)
+            if attempt == 1:
+                _time.sleep(1)
+                continue
+            return None
+        retry_after = (data.get("parameters") or {}).get("retry_after") if isinstance(data, dict) else None
+        if not data.get("ok") and retry_after and attempt == 1 and retry_after <= 5:
+            _time.sleep(retry_after + 0.5)
+            continue
+        break
+    _last_error.pop(bot, None)
     if not data.get("ok"):
         log.warning("telegram %s/%s rad etdi: %s", bot, method, data.get("description"))
     return data
@@ -76,24 +98,36 @@ def setup_webhooks(public_url: str) -> dict:
         if not configured(bot):
             result[bot] = {"ok": False, "error": "Token o'rnatilmagan"}
             continue
+        if not token_format_ok(bot):
+            result[bot] = {"ok": False, "error": "Token formati noto'g'ri. BotFather'dagi tokenni to'liq nusxalang (1234567:AA... ko'rinishida, probelsiz)"}
+            continue
         if not WEBHOOK_SECRET:
             result[bot] = {"ok": False, "error": "TELEGRAM_WEBHOOK_SECRET o'rnatilmagan"}
             continue
-        hook = api_call(bot, "setWebhook", {
-            "url": f"{public_url.rstrip('/')}/api/telegram/{bot}",
-            "secret_token": WEBHOOK_SECRET,
-            "allowed_updates": ["message"],
-            "drop_pending_updates": True,
-        })
-        commands = [{"command": "start", "description": "Do'konga ulanish"}, {"command": "stop", "description": "Ulanishni o'chirish"}]
-        if bot == "report":
-            commands.append({"command": "hisobot", "description": "Bugungi hisobot"})
-        api_call(bot, "setMyCommands", {"commands": commands})
-        result[bot] = {
-            "ok": bool(hook and hook.get("ok")),
-            "error": None if hook and hook.get("ok") else (hook or {}).get("description", "Telegram'ga ulanib bo'lmadi"),
-            "username": bot_username(bot),
-        }
+        target = f"{public_url.rstrip('/')}/api/telegram/{bot}"
+        info = api_call(bot, "getWebhookInfo")
+        if info is None:
+            result[bot] = {"ok": False, "error": f"Telegram javob bermadi ({_last_error.get(bot, 'tarmoq xatosi')}). Birozdan keyin qayta urinib ko'ring"}
+            continue
+        if info.get("ok") and (info.get("result") or {}).get("url") == target:
+            hook = info  # allaqachon o'rnatilgan: qayta o'rnatmaymiz (Telegram tez-tez so'rovni cheklaydi)
+        else:
+            hook = api_call(bot, "setWebhook", {
+                "url": target,
+                "secret_token": WEBHOOK_SECRET,
+                "allowed_updates": ["message"],
+                "drop_pending_updates": True,
+            })
+        ok = bool(hook and hook.get("ok"))
+        if ok:
+            commands = [{"command": "start", "description": "Do'konga ulanish"}, {"command": "stop", "description": "Ulanishni o'chirish"}]
+            if bot == "report":
+                commands.append({"command": "hisobot", "description": "Bugungi hisobot"})
+            api_call(bot, "setMyCommands", {"commands": commands})
+        err = None
+        if not ok:
+            err = (hook or {}).get("description") or f"Telegram javob bermadi ({_last_error.get(bot, 'tarmoq xatosi')})"
+        result[bot] = {"ok": ok, "error": err, "username": bot_username(bot) if ok else None}
     return result
 
 
