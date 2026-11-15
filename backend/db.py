@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 
 def _database_url() -> str:
-    url = os.getenv("DATABASE_URL", "sqlite:///./hisobgo.db")
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        if os.getenv("ENV", "production").lower() in ("dev", "development", "test"):
+            url = "sqlite:///./hisobgo.db"
+        else:
+            raise RuntimeError("DATABASE_URL o'rnatilmagan (Neon Postgres ulanish manzilini kiriting)")
     # Render/Heroku "postgres://" yoki "postgresql://" ni psycopg3 drayveriga moslash
     if url.startswith("postgres://"):
         url = "postgresql+psycopg://" + url[len("postgres://"):]
