@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: hisobgo
+      POSTGRES_PASSWORD: hisobgo_secure_db_password
+      POSTGRES_DB: hisobgo_crm
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    restart: always
+    environment:
+      DATABASE_URL: postgresql+psycopg://hisobgo:hisobgo_secure_db_password@db:5432/hisobgo_crm
+      SUPERADMIN_SECRET_KEY: change_this_superadmin_2fa_key
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      - db
+
+volumes:
+  pgdata:

@@ -1,0 +1,2150 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HisobGoPro SaaS — Do'konlar uchun Multi-Tenant CRM & Superadmin Tizimi</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+    .font-mono-code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+
+  <!-- TOP GLOBAL DEMO & SECURITY BAR -->
+  <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center font-extrabold text-lg shadow-sm">
+          B
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-sm tracking-tight">HisobGo Multi-Tenant SaaS</span>
+            <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">
+              Argon2id + JWT + 2FA
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Superadmin xavfsizlik paneli va HisobGo andozasidagi Do'kon CRM tizimi</p>
+        </div>
+      </div>
+
+      <!-- Mode Switcher Buttons -->
+      <div class="flex flex-wrap items-center gap-1.5 bg-slate-800/90 p-1 rounded-xl border border-slate-700">
+        <button id="modeBtnSuperadmin" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 bg-indigo-600 text-white shadow">
+          <span>🛡️</span> Superadmin Paneli
+        </button>
+        <button id="modeBtnLogin" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 text-slate-300 hover:text-white hover:bg-slate-700">
+          <span>🔑</span> Login / OTP Sinash
+        </button>
+        <button id="modeBtnStoreCrm" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 text-slate-300 hover:text-white hover:bg-slate-700">
+          <span>🏪</span> Do'kon CRM (HisobGo)
+        </button>
+        <button id="modeBtnArch" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 text-slate-300 hover:text-white hover:bg-slate-700">
+          <span>⚙️</span> Arxitektura va GitHub
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+  <!-- ===================================================================== -->
+  <!-- VIEW 1: SUPERADMIN PANEL (HIGH SECURITY TENANT MANAGEMENT)            -->
+  <!-- ===================================================================== -->
+  <main id="viewSuperadmin" class="flex-1 max-w-7xl w-full mx-auto px-4 py-6 space-y-6">
+    <!-- Security Banner & Superadmin Header -->
+    <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-5 text-white shadow-lg border border-indigo-500/20 flex flex-wrap items-center justify-between gap-4">
+      <div class="space-y-1">
+        <div class="inline-flex items-center gap-2 text-xs font-medium text-indigo-300 bg-indigo-500/10 border border-indigo-400/20 px-2.5 py-1 rounded-full">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          Superadmin Sessiyasi Faol • 2FA TOTP Tasdiqlangan • IP: 195.158.24.11 (Toshkent)
+        </div>
+        <h1 class="text-xl sm:text-2xl font-bold tracking-tight">Do'konlar (Tenantlar) va Abonent To'lovlarini Boshqarish</h1>
+        <p class="text-xs sm:text-sm text-slate-300 max-w-2xl">
+          Yangi do'kon qo'shilganda tizim bir martalik parol (OTP) generatsiya qiladi. Do'kon egasi birinchi marta kirganda majburiy ravishda yangi ishonchli parol o'rnatadi.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2.5">
+        <button id="btnOpenCreateStore" type="button" class="px-4 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-sm shadow-md transition flex items-center gap-2">
+          <span>➕</span> Yangi Do'kon Qo'shish (OTP bilan)
+        </button>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm">
+        <div class="flex items-center justify-between text-xs font-medium text-slate-500">
+          <span>Jami ulangan do'konlar</span>
+          <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold">Multi-Tenant</span>
+        </div>
+        <div id="saKpiTotalStores" class="text-2xl font-extrabold text-slate-900 mt-2">4 ta</div>
+        <p id="saKpiOtpPending" class="text-xs text-amber-600 font-medium mt-1">1 ta do'kon OTP parolni yangilashi kutilmoqda</p>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm">
+        <div class="flex items-center justify-between text-xs font-medium text-slate-500">
+          <span>Faol do'konlar</span>
+          <span class="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-semibold">Ishlamoqda</span>
+        </div>
+        <div id="saKpiActiveStores" class="text-2xl font-extrabold text-emerald-600 mt-2">2 ta</div>
+        <p class="text-xs text-slate-500 mt-1">Abonent to'lovi o'z vaqtida to'langan</p>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm">
+        <div class="flex items-center justify-between text-xs font-medium text-slate-500">
+          <span>Bloklangan / Muddati o'tgan</span>
+          <span class="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 font-semibold">Cheklangan</span>
+        </div>
+        <div id="saKpiBlockedStores" class="text-2xl font-extrabold text-rose-600 mt-2">2 ta</div>
+        <p class="text-xs text-slate-500 mt-1">Kirish middleware orqali to'xtatilgan</p>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm">
+        <div class="flex items-center justify-between text-xs font-medium text-slate-500">
+          <span>Oylik Abonent Tushumi (MRR)</span>
+          <span class="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-semibold">HisobGo Tariflari</span>
+        </div>
+        <div id="saKpiMrr" class="text-2xl font-extrabold text-indigo-600 mt-2">1 676 800 so'm</div>
+        <p class="text-xs text-slate-500 mt-1">Start (239.2k), Advanced (399.2k), Pro (799.2k)</p>
+      </div>
+    </div>
+
+    <!-- Filters & Search for Stores -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div class="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <h2 class="font-bold text-base text-slate-900">Do'konlar Hisoblari Ro'yxati</h2>
+          <span class="text-xs text-slate-500">(Har bir do'konni bloklash, abonent sanasini o'zgartirish, OTP berish yoki sinab ko'rish mumkin)</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <input id="saSearchInput" type="text" placeholder="Do'kon, egasi yoki login qidirish..." class="px-3 py-1.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <select id="saStatusFilter" class="px-3 py-1.5 text-sm border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="ALL">Barcha holatlar</option>
+            <option value="ACTIVE">Faol (ACTIVE)</option>
+            <option value="BLOCKED">Bloklangan (BLOCKED)</option>
+            <option value="EXPIRED">To'lov muddati o'tgan (EXPIRED)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Stores Table -->
+      <div class="overflow-x-auto custom-scroll">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-50 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
+              <th class="py-3 px-4 font-semibold">Do'kon va STIR</th>
+              <th class="py-3 px-4 font-semibold">Egasi va Login</th>
+              <th class="py-3 px-4 font-semibold">Tarif Rejasi</th>
+              <th class="py-3 px-4 font-semibold">Xavfsizlik / Parol Holati</th>
+              <th class="py-3 px-4 font-semibold">Abonent To'lovi Sanasi</th>
+              <th class="py-3 px-4 font-semibold">Holati</th>
+              <th class="py-3 px-4 font-semibold text-right">Boshqaruv Amallari</th>
+            </tr>
+          </thead>
+          <tbody id="saStoresTableBody" class="divide-y divide-slate-200 text-sm">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Security Audit Log & Newly Generated OTP Credentials Box -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Latest Generated One-Time Password Card -->
+      <div class="bg-indigo-950 text-white rounded-2xl p-5 border border-indigo-800 shadow-sm flex flex-col justify-between">
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs uppercase tracking-wider font-semibold text-indigo-300">Bir Martalik Parol (OTP) Ma'lumoti</span>
+            <span class="px-2 py-0.5 text-[11px] rounded bg-amber-500/20 text-amber-300 border border-amber-400/30">Majburiy Almashtirish</span>
+          </div>
+          <h3 id="otpCardStoreName" class="text-lg font-bold">Ideal Kiyim Butiki</h3>
+          <p class="text-xs text-indigo-200">
+            Do'kon egasiga quyidagi vaqtinchalik kirish ma'lumotlarini yuboring. U tizimga kirishi bilan yangi kuchli parol o'rnatishi shart bo'ladi:
+          </p>
+          <div class="bg-slate-900/90 rounded-xl p-3.5 border border-indigo-500/30 space-y-1.5 font-mono-code text-xs mt-3">
+            <div class="flex justify-between">
+              <span class="text-slate-400">Do'kon ID / Slug:</span>
+              <span id="otpCardSlug" class="text-emerald-300 font-semibold">TENANT-102</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-400">Login:</span>
+              <span id="otpCardLogin" class="text-white font-semibold">ideal</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-400">Bir martalik parol:</span>
+              <span id="otpCardPassword" class="text-amber-300 font-bold">OTP-8492-X7</span>
+            </div>
+          </div>
+        </div>
+        <div class="pt-4 mt-4 border-t border-indigo-800/80 flex flex-wrap gap-2">
+          <button id="btnCopyOtpCredentials" type="button" class="flex-1 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold transition">
+            📋 Ma'lumotlarni nusxalash
+          </button>
+          <button id="btnSimulateOtpLogin" type="button" class="flex-1 py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition">
+            🚀 Do'kon egasi bo'lib kirish
+          </button>
+        </div>
+      </div>
+
+      <!-- High Security Audit Log -->
+      <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 flex flex-col">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+          <div>
+            <h3 class="font-bold text-slate-900 text-base">Xavfsizlik va Superadmin Audit Jurnali (Immutable Log)</h3>
+            <p class="text-xs text-slate-500">Har bir do'kon qo'shish, bloklash, abonent muddatini o'zgartirish va parol yangilash amallari qayd etiladi</p>
+          </div>
+          <span class="text-xs font-mono-code bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg">SHA-256 Chain</span>
+        </div>
+        <div id="saAuditLogList" class="mt-3 space-y-2 max-h-60 overflow-y-auto custom-scroll pr-1">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- VIEW 2: LOGIN & MANDATORY ONE-TIME PASSWORD CHANGE FLOW               -->
+  <!-- ===================================================================== -->
+  <section id="viewLoginFlow" class="hidden flex-1 max-w-4xl w-full mx-auto px-4 py-8">
+    <div class="grid grid-cols-1 md:grid-cols-5 bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
+      <!-- Left Column: Instructions & Quick Test Accounts -->
+      <div class="md:col-span-2 bg-slate-900 text-white p-6 flex flex-col justify-between">
+        <div class="space-y-4">
+          <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-semibold">
+            🔒 Zero-Trust Autentifikatsiya
+          </div>
+          <h2 class="text-xl font-bold leading-snug">Do'kon Egasi Kirishi va Bir Martalik Parol Tekshiruvi</h2>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Superadmin yangi do'kon ochganda bir martalik parol beradi. Do'kon egasi birinchi marta kirganda tizim uni avtomatik ravishda <strong>Yangi Ishonchli Parol O'rnatish</strong> oynasiga o'tkazadi.
+          </p>
+
+          <div class="space-y-2 pt-2">
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">1-Klik bilan sinab ko'rish uchun hisoblar:</div>
+            <div id="quickLoginAccountsList" class="space-y-2">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-6 border-t border-slate-800 text-[11px] text-slate-400 space-y-1">
+          <div>• Bloklangan do'konlar: <span class="text-rose-400 font-medium">403 Locked</span> qaytaradi</div>
+          <div>• Muddati o'tganlar: <span class="text-amber-400 font-medium">402 Payment Required</span> qaytaradi</div>
+        </div>
+      </div>
+
+      <!-- Right Column: Step A (Login Form) OR Step B (Force Password Change) OR Step C (Blocked/Expired Alert) -->
+      <div class="md:col-span-3 p-6 sm:p-8 flex flex-col justify-center">
+        <!-- STEP A: Standard / OTP Login -->
+        <div id="loginStepCredentials" class="space-y-5">
+          <div>
+            <span class="text-xs font-bold uppercase tracking-wider text-indigo-600">1-Qadam • Tizimga kirish</span>
+            <h3 class="text-xl font-bold text-slate-900 mt-1">Do'kon CRM hisobiga kirish</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Login va parolingizni (yoki Superadmin bergan bir martalik OTP parolni) kiriting</p>
+          </div>
+
+          <div id="loginErrorAlert" class="hidden p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium"></div>
+
+          <form id="formStoreLogin" class="space-y-4">
+            <div>
+              <label for="inputLoginUsername" class="block text-xs font-semibold text-slate-700 mb-1">Do'kon Logini</label>
+              <input id="inputLoginUsername" type="text" required value="ideal" placeholder="Masalan: ideal yoki baraka" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+              <label for="inputLoginPassword" class="block text-xs font-semibold text-slate-700 mb-1">Parol yoki Bir Martalik Parol (OTP)</label>
+              <input id="inputLoginPassword" type="text" required value="OTP-8492-X7" placeholder="Parolni kiriting" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono-code focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <button type="submit" class="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-md transition">
+              Hisobga kirish →
+            </button>
+          </form>
+        </div>
+
+        <!-- STEP B: Mandatory First-Time Password Replacement -->
+        <div id="loginStepForceChange" class="hidden space-y-5">
+          <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3">
+            <span class="text-xl">🔐</span>
+            <div class="text-xs text-amber-900 space-y-0.5">
+              <div class="font-bold">Bir martalik parol aniqlandi! Yangi doimiy parol o'rnating</div>
+              <p>Xavfsizlik qoidasiga ko'ra, <strong id="forceChangeStoreTitle">Ideal Kiyim Butiki</strong> hisobiga birinchi marta kirganingiz uchun yangi ishonchli parol kiritishingiz shart.</p>
+            </div>
+          </div>
+
+          <form id="formForcePasswordChange" class="space-y-4">
+            <div>
+              <label for="inputNewStrongPassword" class="block text-xs font-semibold text-slate-700 mb-1">Yangi ishonchli parol</label>
+              <input id="inputNewStrongPassword" type="text" required placeholder="Masalan: IdealShop#2026" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono-code focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+              <label for="inputConfirmStrongPassword" class="block text-xs font-semibold text-slate-700 mb-1">Yangi parolni tasdiqlang</label>
+              <input id="inputConfirmStrongPassword" type="text" required placeholder="Yangi parolni qayta kiriting" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono-code focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+
+            <!-- Real-time Password Strength Checklist -->
+            <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+              <div class="flex items-center justify-between text-xs font-semibold">
+                <span>Parol mustahkamligi talablari:</span>
+                <span id="pwStrengthBadge" class="px-2 py-0.5 rounded bg-slate-200 text-slate-700">Kiritilmoqda...</span>
+              </div>
+              <ul class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs text-slate-600">
+                <li id="reqLen" class="flex items-center gap-1.5"><span>⚪</span> Kamida 8 ta belgi</li>
+                <li id="reqUpper" class="flex items-center gap-1.5"><span>⚪</span> Katta harf (A-Z)</li>
+                <li id="reqLower" class="flex items-center gap-1.5"><span>⚪</span> Kichik harf (a-z)</li>
+                <li id="reqNum" class="flex items-center gap-1.5"><span>⚪</span> Kamida 1 ta raqam (0-9)</li>
+                <li id="reqSpec" class="flex items-center gap-1.5 sm:col-span-2"><span>⚪</span> Maxsus belgi (!@#$%^&*) va eski OTP dan farqli</li>
+              </ul>
+            </div>
+
+            <div id="forceChangeError" class="hidden text-xs font-semibold text-rose-600"></div>
+
+            <div class="flex items-center gap-2 pt-1">
+              <button id="btnFillSampleStrongPw" type="button" class="px-3 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-xs font-semibold text-slate-700 transition">
+                ✨ Namuna kuchli parol
+              </button>
+              <button type="submit" class="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm shadow-md transition">
+                Parolni saqlash va CRM ga kirish →
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- VIEW 3: HisobGo.UZ INSPIRED STORE CRM & POS SYSTEM                      -->
+  <!-- ===================================================================== -->
+  <section id="viewStoreCrm" class="hidden flex-1 flex flex-col">
+    <!-- Store Context Subheader -->
+    <div class="bg-white border-b border-slate-200">
+      <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white font-bold flex items-center justify-center text-base shadow-sm">
+            🏪
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 id="crmActiveStoreName" class="font-bold text-base text-slate-900">Baraka Market</h2>
+              <span id="crmActiveStorePlan" class="text-xs px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200">Advanced Tarif</span>
+              <span id="crmActiveStoreExpiry" class="text-xs px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-medium border border-emerald-200">Obuna: 2026-12-15 gacha</span>
+            </div>
+            <p id="crmActiveStoreOwner" class="text-xs text-slate-500">Egasi: Sardor Rahimov • Filial: Asosiy savdo nuqtasi • Valyuta: UZS</p>
+          </div>
+        </div>
+
+        <!-- Switch Active Store Dropdown + Navigation Pills -->
+        <div class="flex flex-wrap items-center gap-2">
+          <label for="crmStoreSelector" class="text-xs font-medium text-slate-500">Faol do'kon:</label>
+          <select id="crmStoreSelector" class="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <!-- Populated by JS -->
+          </select>
+        </div>
+      </div>
+
+      <!-- HisobGo Module Tabs -->
+      <div class="max-w-7xl mx-auto px-4 flex overflow-x-auto custom-scroll gap-1 pt-1">
+        <button type="button" data-crm-tab="dashboard" class="crm-tab-btn border-b-2 border-indigo-600 text-indigo-600 px-4 py-2.5 text-xs sm:text-sm font-bold whitespace-nowrap transition">
+          📊 Ko'rsatkichlar (Dashboard)
+        </button>
+        <button type="button" data-crm-tab="pos" class="crm-tab-btn border-b-2 border-transparent text-slate-600 hover:text-slate-900 px-4 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap transition">
+          🛒 Kassa / POS Savdo
+        </button>
+        <button type="button" data-crm-tab="inventory" class="crm-tab-btn border-b-2 border-transparent text-slate-600 hover:text-slate-900 px-4 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap transition">
+          📦 Tovarlar va Ombor
+        </button>
+        <button type="button" data-crm-tab="customers" class="crm-tab-btn border-b-2 border-transparent text-slate-600 hover:text-slate-900 px-4 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap transition">
+          👥 Mijozlar va Nasiya (CRM)
+        </button>
+        <button type="button" data-crm-tab="finance" class="crm-tab-btn border-b-2 border-transparent text-slate-600 hover:text-slate-900 px-4 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap transition">
+          🧾 Cheklar va Moliya Hisoboti
+        </button>
+      </div>
+    </div>
+
+    <!-- CRM CONTENT CONTAINER -->
+    <div class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+      <!-- SUBVIEW 3.1: HisobGo DASHBOARD & ANALYTICS -->
+      <div id="crmTabDashboard" class="space-y-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="text-xs font-medium text-slate-500">Jami Savdo Tushumi</div>
+            <div id="crmKpiRevenue" class="text-2xl font-extrabold text-slate-900 mt-1">0 so'm</div>
+            <div class="text-xs text-emerald-600 font-medium mt-1">Kassa cheklari bo'yicha real vaqtda</div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="text-xs font-medium text-slate-500">Sof Foyda (Marja)</div>
+            <div id="crmKpiProfit" class="text-2xl font-extrabold text-emerald-600 mt-1">0 so'm</div>
+            <div id="crmKpiMarginPct" class="text-xs text-slate-500 mt-1">O'rtacha ustama: 0%</div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="text-xs font-medium text-slate-500">Ombordagi Tovarlar Qiymati</div>
+            <div id="crmKpiInventoryVal" class="text-2xl font-extrabold text-indigo-600 mt-1">0 so'm</div>
+            <div id="crmKpiTotalSkus" class="text-xs text-slate-500 mt-1">0 xil mahsulot (SKU)</div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="text-xs font-medium text-slate-500">Mijozlar Nasiya Qarzdorligi</div>
+            <div id="crmKpiTotalDebt" class="text-2xl font-extrabold text-amber-600 mt-1">0 so'm</div>
+            <div id="crmKpiCustomerCount" class="text-xs text-slate-500 mt-1">Mijozlar bazasi: 0 nafar</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Sales Chart -->
+          <div class="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h3 class="font-bold text-slate-900 text-base">Haftalik Savdo va Tushum Dinamikasi (HisobGo Analytics)</h3>
+                <p class="text-xs text-slate-500">Kassa orqali o'tgan har bir yangi sotuv grafikda darhol aks etadi</p>
+              </div>
+              <button id="btnGoToPosFromDash" type="button" class="px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-semibold transition">
+                + Yangi sotuv (POS)
+              </button>
+            </div>
+            <div class="relative h-72">
+              <canvas id="HisobGoSalesChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Low Stock Alert & Quick Store Stats -->
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+                <h3 class="font-bold text-slate-900 text-base">Omborda Kam Qolgan Tovarlar</h3>
+                <span class="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-800 font-semibold">Nazorat</span>
+              </div>
+              <div id="crmLowStockList" class="mt-3 space-y-2.5 max-h-60 overflow-y-auto custom-scroll">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+            <div class="pt-4 mt-4 border-t border-slate-100">
+              <button id="btnGoToInventoryFromDash" type="button" class="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition">
+                📦 Ombor va Tovarlar bo'limiga o'tish
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUBVIEW 3.2: HisobGo POS TERMINAL (KASSA VA SAVDO) -->
+      <div id="crmTabPos" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Left 7 Cols: Product Catalog Search & Grid -->
+        <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col">
+          <div class="flex flex-wrap items-center gap-2 pb-4 border-b border-slate-200">
+            <input id="posSearchInput" type="text" placeholder="🔍 Shtrixkod (SKU) yoki tovar nomini yozing..." class="flex-1 min-w-[200px] px-3.5 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select id="posCategorySelect" class="px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="ALL">Barcha toifalar</option>
+            </select>
+          </div>
+
+          <div id="posProductsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 max-h-[500px] overflow-y-auto custom-scroll pr-1">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- Right 5 Cols: Active POS Cart & Checkout -->
+        <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col justify-between">
+          <div class="space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div>
+                <h3 class="font-bold text-slate-900 text-base">Kassa Cheki (Savat)</h3>
+                <p class="text-xs text-slate-500">Mijozni tanlang, chegirma yoki nasiya to'lovni belgilang</p>
+              </div>
+              <button id="btnClearPosCart" type="button" class="text-xs text-rose-600 hover:underline font-semibold">
+                Tozalash
+              </button>
+            </div>
+
+            <!-- Customer Selector for Loyalty / Nasiya -->
+            <div>
+              <label for="posCustomerSelect" class="block text-xs font-semibold text-slate-700 mb-1">Mijoz (Keshbek / Nasiya yozish uchun)</label>
+              <select id="posCustomerSelect" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <!-- Populated by JS -->
+              </select>
+            </div>
+
+            <!-- Cart Items -->
+            <div id="posCartItemsList" class="space-y-2 max-h-56 overflow-y-auto custom-scroll pr-1">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <!-- Totals & Payment Method -->
+          <div class="pt-4 mt-4 border-t border-slate-200 space-y-3">
+            <div class="flex items-center justify-between gap-2">
+              <label for="posDiscountInput" class="text-xs font-semibold text-slate-600">Chegirma (%):</label>
+              <input id="posDiscountInput" type="number" min="0" max="50" value="0" class="w-24 px-2.5 py-1 text-right rounded-lg border border-slate-300 text-sm font-semibold">
+            </div>
+
+            <div class="bg-slate-50 rounded-xl p-3 space-y-1 text-xs">
+              <div class="flex justify-between text-slate-600">
+                <span>Jami summa:</span>
+                <span id="posSubtotalText" class="font-semibold">0 so'm</span>
+              </div>
+              <div class="flex justify-between text-rose-600">
+                <span>Chegirma:</span>
+                <span id="posDiscountText">-0 so'm</span>
+              </div>
+              <div class="flex justify-between text-base font-extrabold text-slate-900 pt-1 border-t border-slate-200">
+                <span>To'lovga:</span>
+                <span id="posTotalText">0 so'm</span>
+              </div>
+            </div>
+
+            <!-- Payment Type Selector -->
+            <div>
+              <span class="block text-xs font-semibold text-slate-700 mb-1.5">To'lov turi:</span>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5" id="posPaymentMethodGroup">
+                <button type="button" data-pay-method="Naqd" class="pos-pay-btn py-2 px-2 rounded-xl text-xs font-bold border bg-indigo-600 text-white border-indigo-600">
+                  💵 Naqd
+                </button>
+                <button type="button" data-pay-method="Uzcard/Humo" class="pos-pay-btn py-2 px-2 rounded-xl text-xs font-semibold border bg-white text-slate-700 border-slate-300">
+                  💳 Karta
+                </button>
+                <button type="button" data-pay-method="Click/Payme" class="pos-pay-btn py-2 px-2 rounded-xl text-xs font-semibold border bg-white text-slate-700 border-slate-300">
+                  📱 Click/Payme
+                </button>
+                <button type="button" data-pay-method="Nasiya" class="pos-pay-btn py-2 px-2 rounded-xl text-xs font-semibold border bg-white text-amber-700 border-amber-300">
+                  📒 Nasiya
+                </button>
+              </div>
+            </div>
+
+            <button id="btnCompletePosSale" type="button" class="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md transition">
+              ✅ Sotuvni Yakunlash va Chek Chiqarish
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUBVIEW 3.3: GOODS & INVENTORY (TOVARLAR VA OMBOR) -->
+      <div id="crmTabInventory" class="hidden space-y-5">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="font-bold text-base text-slate-900">Tovarlar Katalogi va Ombor Qoldiqlari (HisobGo Goods Accounting)</h3>
+            <p class="text-xs text-slate-500">Shtrixkod, tannarx, sotuv narxi, marja va qoldiqlarni boshqarish</p>
+          </div>
+          <button id="btnOpenAddProductModal" type="button" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-sm transition">
+            + Yangi Tovar Qo'shish
+          </button>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="overflow-x-auto custom-scroll">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 text-slate-600 text-xs uppercase border-b border-slate-200">
+                  <th class="py-3 px-4 font-semibold">SKU / Shtrixkod</th>
+                  <th class="py-3 px-4 font-semibold">Tovar Nomi</th>
+                  <th class="py-3 px-4 font-semibold">Toifa</th>
+                  <th class="py-3 px-4 font-semibold text-right">Kelish narxi (Tannarx)</th>
+                  <th class="py-3 px-4 font-semibold text-right">Sotuv narxi</th>
+                  <th class="py-3 px-4 font-semibold text-right">Ustama</th>
+                  <th class="py-3 px-4 font-semibold text-center">Ombor Qoldig'i</th>
+                  <th class="py-3 px-4 font-semibold text-right">Kirim Amali</th>
+                </tr>
+              </thead>
+              <tbody id="crmInventoryTableBody" class="divide-y divide-slate-200 text-sm">
+                <!-- Populated by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUBVIEW 3.4: CUSTOMERS, LOYALTY & NASIYA (MIJOZLAR VA QARZLAR) -->
+      <div id="crmTabCustomers" class="hidden space-y-5">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="font-bold text-base text-slate-900">Mijozlar Bazasi, Keshbek Bonuslari va Nasiya Daftari</h3>
+            <p class="text-xs text-slate-500">Mijozlarning xarid tarixi, sodiqlik keshbeki va nasiya qarzdorligini so'ndirish</p>
+          </div>
+          <button id="btnOpenAddCustomerModal" type="button" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-sm transition">
+            + Yangi Mijoz Qo'shish
+          </button>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="overflow-x-auto custom-scroll">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 text-slate-600 text-xs uppercase border-b border-slate-200">
+                  <th class="py-3 px-4 font-semibold">Mijoz F.I.Sh.</th>
+                  <th class="py-3 px-4 font-semibold">Telefon</th>
+                  <th class="py-3 px-4 font-semibold text-right">Jami Xaridlar</th>
+                  <th class="py-3 px-4 font-semibold text-right">Keshbek Balansi (3%)</th>
+                  <th class="py-3 px-4 font-semibold text-right">Nasiya (Qarz) Balansi</th>
+                  <th class="py-3 px-4 font-semibold text-right">Amallar</th>
+                </tr>
+              </thead>
+              <tbody id="crmCustomersTableBody" class="divide-y divide-slate-200 text-sm">
+                <!-- Populated by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUBVIEW 3.5: RECEIPTS & FINANCE REPORTS -->
+      <div id="crmTabFinance" class="hidden space-y-5">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+          <h3 class="font-bold text-base text-slate-900">Kassa Cheklari Tarixi va To'lov Turlari Hisoboti</h3>
+          <p class="text-xs text-slate-500">Barcha yakunlangan sotuvlar, to'lov usullari va sof foyda tahlili</p>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="overflow-x-auto custom-scroll">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 text-slate-600 text-xs uppercase border-b border-slate-200">
+                  <th class="py-3 px-4 font-semibold">Chek №</th>
+                  <th class="py-3 px-4 font-semibold">Vaqt</th>
+                  <th class="py-3 px-4 font-semibold">Mijoz</th>
+                  <th class="py-3 px-4 font-semibold">Tovarlar</th>
+                  <th class="py-3 px-4 font-semibold">To'lov Turi</th>
+                  <th class="py-3 px-4 font-semibold text-right">Summa</th>
+                </tr>
+              </thead>
+              <tbody id="crmReceiptsTableBody" class="divide-y divide-slate-200 text-sm">
+                <!-- Populated by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- VIEW 4: SYSTEM ARCHITECTURE & GITHUB DEPLOYMENT GUIDE                 -->
+  <!-- ===================================================================== -->
+  <section id="viewArchitecture" class="hidden flex-1 max-w-7xl w-full mx-auto px-4 py-6 space-y-6">
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-200">
+        <div>
+          <span class="text-xs font-bold uppercase tracking-wider text-indigo-600">Multi-Tenant SaaS Architecture</span>
+          <h2 class="text-xl font-bold text-slate-900">Tizim Arxitekturasi, Ma'lumotlar Bazasi Sxemasi va GitHub Joylashtirish</h2>
+        </div>
+        <span class="text-xs font-mono-code bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-lg">
+          FastAPI + PostgreSQL RLS + React/Tailwind
+        </span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+          <div class="font-bold text-sm text-slate-900">1. Superadmin & Security Layer</div>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Superadmin hisobi <strong>Argon2id</strong> xeshlash + <strong>TOTP 2FA</strong> + IP Whitelist bilan himoyalangan. Har bir do'kon qo'shilganda <code>secrets.token_urlsafe</code> orqali bir martalik parol (OTP) yaratiladi va <code>must_change_password = True</code> belgilanadi.
+          </p>
+        </div>
+        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+          <div class="font-bold text-sm text-slate-900">2. Subscription & Lock Middleware</div>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            FastAPI <code>TenantGuardMiddleware</code> har bir API so'rovda do'konning <code>status == 'ACTIVE'</code> va <code>subscription_expires_at &gt;= today</code> ekanligini tekshiradi. Bloklangan yoki muddati o'tgan do'konlar darhol to'xtatiladi.
+          </p>
+        </div>
+        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+          <div class="font-bold text-sm text-slate-900">3. Tenant Isolation (PostgreSQL)</div>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Barcha <code>products</code>, <code>customers</code>, <code>sales</code>, <code>inventory_logs</code> jadvallarida <code>store_id (UUID)</code> indeksi va PostgreSQL Row-Level Security (RLS) ishlaydi — bir do'kon boshqa do'kon ma'lumotlarini hech qachon ko'ra olmaydi.
+          </p>
+        </div>
+      </div>
+
+      <!-- GitHub Push Instructions Box -->
+      <div class="bg-slate-900 text-slate-100 rounded-2xl p-5 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-indigo-400">GitHub Repozitoriy Yaratish va Push Qilish Buyruqlari (Otabek1511)</span>
+          <button id="btnCopyGitCommands" type="button" class="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition">
+            📋 Buyruqlarni nusxalash
+          </button>
+        </div>
+        <pre id="gitCommandsBlock" class="text-xs font-mono-code text-emerald-300 overflow-x-auto leading-relaxed">unzip hisobgo-crm.zip -d hisobgo-crm
+cd hisobgo-crm
+git init
+git branch -M main
+git add .
+git commit -m "feat: initial commit of HisobGo Multi-Tenant Retail CRM and Superadmin System"
+gh repo create Otabek1511/hisobgo-crm --public --source=. --remote=origin --push</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 1: CREATE NEW STORE (WITH ONE-TIME PASSWORD GENERATION)         -->
+  <!-- ===================================================================== -->
+  <div id="modalCreateStore" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div>
+          <h3 class="font-bold text-lg text-slate-900">Yangi Do'kon Hisobini Qo'shish</h3>
+          <p class="text-xs text-slate-500">Yangi do'konga avtomatik bir martalik parol (OTP) biriktiriladi</p>
+        </div>
+        <button id="btnCloseCreateStore" type="button" class="text-slate-400 hover:text-slate-700 font-bold text-lg">✕</button>
+      </div>
+
+      <form id="formCreateStore" class="space-y-3.5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="newStoreName" class="block text-xs font-semibold text-slate-700 mb-1">Do'kon nomi *</label>
+            <input id="newStoreName" type="text" required placeholder="Masalan: Havas Minimarket" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <div>
+            <label for="newStoreTin" class="block text-xs font-semibold text-slate-700 mb-1">STIR (INN) *</label>
+            <input id="newStoreTin" type="text" required value="309481205" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm font-mono-code">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="newStoreOwner" class="block text-xs font-semibold text-slate-700 mb-1">Do'kon egasi F.I.Sh. *</label>
+            <input id="newStoreOwner" type="text" required placeholder="Masalan: Jasur Karimov" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <div>
+            <label for="newStorePhone" class="block text-xs font-semibold text-slate-700 mb-1">Telefon raqami *</label>
+            <input id="newStorePhone" type="text" required value="+998 90 123 45 67" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="newStoreLogin" class="block text-xs font-semibold text-slate-700 mb-1">Tizimga kirish Logini *</label>
+            <input id="newStoreLogin" type="text" required placeholder="Masalan: havas" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm font-mono-code">
+          </div>
+          <div>
+            <label for="newStorePlan" class="block text-xs font-semibold text-slate-700 mb-1">HisobGo Tarif Rejasi *</label>
+            <select id="newStorePlan" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white">
+              <option value="Start">Start — 239 200 so'm/oy</option>
+              <option value="Advanced" selected>Advanced — 399 200 so'm/oy</option>
+              <option value="Pro">Pro — 799 200 so'm/oy</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="newStoreExpiry" class="block text-xs font-semibold text-slate-700 mb-1">Abonent to'lovi sanasi *</label>
+            <input id="newStoreExpiry" type="date" required value="2026-12-14" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <div>
+            <label for="newStoreOtp" class="block text-xs font-semibold text-slate-700 mb-1">Bir martalik parol (OTP) *</label>
+            <div class="flex gap-1.5">
+              <input id="newStoreOtp" type="text" readonly class="w-full px-3 py-2 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 font-mono-code font-bold text-sm">
+              <button id="btnRegenerateOtp" type="button" class="px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold" title="Yangi OTP yaratish">🔄</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-indigo-50 border border-indigo-100 text-xs text-indigo-900">
+          💡 Do'kon egasi ushbu <strong>bir martalik parol</strong> bilan tizimga birinchi marta kirganda, undan yangi kuchli parol o'rnatish talab qilinadi.
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button id="btnCancelCreateStore" type="button" class="px-4 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+            Bekor qilish
+          </button>
+          <button type="submit" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md">
+            ✅ Do'konni Yaratish va OTP Berish
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 2: ADD PRODUCT TO INVENTORY                                     -->
+  <!-- ===================================================================== -->
+  <div id="modalAddProduct" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <h3 class="font-bold text-lg text-slate-900">Yangi Tovar Qo'shish (Katalog)</h3>
+        <button id="btnCloseAddProduct" type="button" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+      <form id="formAddProduct" class="space-y-3">
+        <div>
+          <label for="prodNameInput" class="block text-xs font-semibold text-slate-700 mb-1">Tovar nomi *</label>
+          <input id="prodNameInput" type="text" required placeholder="Masalan: Nestle Sut 1L 3.2%" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="prodSkuInput" class="block text-xs font-semibold text-slate-700 mb-1">Shtrixkod / SKU *</label>
+            <input id="prodSkuInput" type="text" required value="4780019283" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm font-mono-code">
+          </div>
+          <div>
+            <label for="prodCatInput" class="block text-xs font-semibold text-slate-700 mb-1">Toifa *</label>
+            <input id="prodCatInput" type="text" required value="Oziq-ovqat" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label for="prodCostInput" class="block text-xs font-semibold text-slate-700 mb-1">Tannarx (so'm)</label>
+            <input id="prodCostInput" type="number" required min="100" value="11000" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <div>
+            <label for="prodPriceInput" class="block text-xs font-semibold text-slate-700 mb-1">Sotuv narxi</label>
+            <input id="prodPriceInput" type="number" required min="100" value="14500" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <div>
+            <label for="prodStockInput" class="block text-xs font-semibold text-slate-700 mb-1">Boshlang'ich soni</label>
+            <input id="prodStockInput" type="number" required min="1" value="40" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button id="btnCancelAddProduct" type="button" class="px-4 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700">Bekor qilish</button>
+          <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">Saqlash</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 3: ADD CUSTOMER TO CRM                                          -->
+  <!-- ===================================================================== -->
+  <div id="modalAddCustomer" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <h3 class="font-bold text-lg text-slate-900">Yangi Mijoz Qo'shish (CRM)</h3>
+        <button id="btnCloseAddCustomer" type="button" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+      <form id="formAddCustomer" class="space-y-3">
+        <div>
+          <label for="custNameInput" class="block text-xs font-semibold text-slate-700 mb-1">Mijoz F.I.Sh. *</label>
+          <input id="custNameInput" type="text" required placeholder="Masalan: Dilshod Toshmatov" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+        </div>
+        <div>
+          <label for="custPhoneInput" class="block text-xs font-semibold text-slate-700 mb-1">Telefon raqami *</label>
+          <input id="custPhoneInput" type="text" required value="+998 93 555 11 22" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button id="btnCancelAddCustomer" type="button" class="px-4 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700">Bekor qilish</button>
+          <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">Mijozni Saqlash</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- APPLICATION LOGIC                                                     -->
+  <!-- ===================================================================== -->
+  <script>
+    (function() {
+      const TODAY_STR = "2026-11-14";
+      const PLAN_PRICES = {
+        Start: 239200,
+        Advanced: 399200,
+        Pro: 799200
+      };
+
+      // Initial Multi-Tenant Stores State
+      const state = {
+        activeView: "superadmin", // 'superadmin' | 'login' | 'crm' | 'arch'
+        activeCrmTab: "dashboard",
+        activeStoreId: "store-1",
+        pendingPasswordChangeStoreId: "store-2",
+        selectedPosPayment: "Naqd",
+        posCart: [
+          { sku: "478001001", qty: 2 },
+          { sku: "478001003", qty: 1 }
+        ],
+        stores: [
+          {
+            id: "store-1",
+            slug: "TENANT-101",
+            name: "Baraka Market",
+            tin: "305112849",
+            owner: "Sardor Rahimov",
+            phone: "+998 90 911 22 33",
+            login: "baraka",
+            password: "Baraka#2026",
+            mustChangePassword: false,
+            plan: "Advanced",
+            subscriptionExpiresAt: "2026-12-15",
+            status: "ACTIVE",
+            weeklySales: [4200000, 5100000, 4800000, 6300000, 5900000, 7400000, 6850000],
+            products: [
+              { sku: "478001001", name: "Al-ifoda Kungaboqar yog'i 5L", category: "Oziq-ovqat", cost: 68000, price: 82000, stock: 34 },
+              { sku: "478001002", name: "Makfa Makaron 400g", category: "Oziq-ovqat", cost: 7500, price: 10000, stock: 85 },
+              { sku: "478001003", name: "Chortoq Mineral suvi 0.5L", category: "Ichimliklar", cost: 3800, price: 5500, stock: 7 },
+              { sku: "478001004", name: "Musaffo Sut 1L 3.2%", category: "Sut mahsulotlari", cost: 10500, price: 13500, stock: 6 },
+              { sku: "478001005", name: "Nescafe Gold Qahva 190g", category: "Ichimliklar", cost: 48000, price: 62000, stock: 19 }
+            ],
+            customers: [
+              { id: "c1", name: "Azizbek Qodirov", phone: "+998 90 111 22 33", totalSpent: 2450000, cashback: 73500, debt: 180000 },
+              { id: "c2", name: "Malika Yunusova", phone: "+998 93 444 55 66", totalSpent: 1890000, cashback: 56700, debt: 0 },
+              { id: "c3", name: "Ulug'bek Xolmatov", phone: "+998 97 777 88 99", totalSpent: 950000, cashback: 28500, debt: 320000 }
+            ],
+            receipts: [
+              { id: "CHK-9041", time: "2026-11-14 19:20", customer: "Azizbek Qodirov", items: "Kungaboqar yog'i 5L x1, Makfa x2", method: "Uzcard/Humo", total: 102000, profit: 19000 },
+              { id: "CHK-9040", time: "2026-11-14 18:05", customer: "Ulug'bek Xolmatov", items: "Nescafe Gold x2, Sut 1L x2", method: "Nasiya", total: 151000, profit: 34000 }
+            ]
+          },
+          {
+            id: "store-2",
+            slug: "TENANT-102",
+            name: "Ideal Kiyim Butiki",
+            tin: "308774112",
+            owner: "Nilufar Saidova",
+            phone: "+998 94 600 10 20",
+            login: "ideal",
+            password: "OTP-8492-X7",
+            mustChangePassword: true,
+            plan: "Start",
+            subscriptionExpiresAt: "2026-12-01",
+            status: "ACTIVE",
+            weeklySales: [3100000, 2800000, 3900000, 4500000, 5200000, 6100000, 4900000],
+            products: [
+              { sku: "8801001", name: "Erkaklar Klassik Ko'ylagi (Oq, L)", category: "Kiyim-kechak", cost: 145000, price: 220000, stock: 14 },
+              { sku: "8801002", name: "Ayollar Kuzgi Plash (Bej, M)", category: "Kiyim-kechak", cost: 320000, price: 480000, stock: 4 },
+              { sku: "8801003", name: "Charm Kamar Premium", category: "Aksessuarlar", cost: 65000, price: 110000, stock: 22 }
+            ],
+            customers: [
+              { id: "c10", name: "Shahzod Aliyev", phone: "+998 90 300 40 50", totalSpent: 1420000, cashback: 42600, debt: 0 },
+              { id: "c11", name: "Zarina Umarova", phone: "+998 91 222 33 44", totalSpent: 960000, cashback: 28800, debt: 240000 }
+            ],
+            receipts: [
+              { id: "CHK-3011", time: "2026-11-14 17:40", customer: "Shahzod Aliyev", items: "Klassik Ko'ylak x1, Charm Kamar x1", method: "Click/Payme", total: 330000, profit: 120000 }
+            ]
+          },
+          {
+            id: "store-3",
+            slug: "TENANT-103",
+            name: "TexnoMart Qarshi",
+            tin: "302991004",
+            owner: "Bekzod Nurmatov",
+            phone: "+998 95 240 11 22",
+            login: "texno",
+            password: "Texno#2026",
+            mustChangePassword: false,
+            plan: "Pro",
+            subscriptionExpiresAt: "2026-11-28",
+            status: "BLOCKED",
+            weeklySales: [8500000, 9200000, 7400000, 11200000, 10500000, 13400000, 9800000],
+            products: [
+              { sku: "990101", name: "Xiaomi Redmi Note 14 8/256GB", category: "Elektronika", cost: 2150000, price: 2590000, stock: 9 },
+              { sku: "990102", name: "Samsung Buds FE Simsiz Quloqchin", category: "Aksessuarlar", cost: 620000, price: 850000, stock: 3 }
+            ],
+            customers: [
+              { id: "c20", name: "OtabekShavkatovich", phone: "+998 95 240 00 78", totalSpent: 5180000, cashback: 155400, debt: 0 }
+            ],
+            receipts: []
+          },
+          {
+            id: "store-4",
+            slug: "TENANT-104",
+            name: "Sevinch Bakery & Minimarket",
+            tin: "310229384",
+            owner: "Sevinch Qodirova",
+            phone: "+998 99 800 30 04",
+            login: "sevinch",
+            password: "Sevinch#2026",
+            mustChangePassword: false,
+            plan: "Start",
+            subscriptionExpiresAt: "2026-11-10",
+            status: "EXPIRED",
+            weeklySales: [1900000, 2100000, 2400000, 2250000, 2700000, 3100000, 2950000],
+            products: [
+              { sku: "770101", name: "Medovik Tort 1.2kg", category: "Qandolat", cost: 75000, price: 125000, stock: 8 },
+              { sku: "770102", name: "Choko Kruassan", category: "Pishiriqlar", cost: 9000, price: 16000, stock: 25 }
+            ],
+            customers: [
+              { id: "c30", name: "Nigora Rustamova", phone: "+998 90 505 60 70", totalSpent: 640000, cashback: 19200, debt: 50000 }
+            ],
+            receipts: []
+          }
+        ],
+        auditLogs: [
+          { time: "2026-11-14 21:48", actor: "superadmin", action: "CREATE_STORE_OTP", detail: "'Ideal Kiyim Butiki' qo'shildi va bir martalik parol (OTP-8492-X7) berildi." },
+          { time: "2026-11-14 20:15", actor: "superadmin", action: "BLOCK_STORE", detail: "'TexnoMart Qarshi' hisobi vaqtincha bloklandi (status: BLOCKED)." },
+          { time: "2026-11-14 18:00", actor: "system-cron", action: "SUBSCRIPTION_EXPIRED", detail: "'Sevinch Bakery & Minimarket' abonent to'lovi muddati (2026-11-10) tugaganligi aniqlandi." }
+        ]
+      };
+
+      let salesChartInstance = null;
+
+      function formatUzs(amount) {
+        const num = Number(amount) || 0;
+        return num.toLocaleString("ru-RU") + " so'm";
+      }
+
+      function generateRandomOtp() {
+        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        let part1 = "";
+        let part2 = "";
+        for (let i = 0; i < 4; i++) {
+          part1 += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        for (let i = 0; i < 2; i++) {
+          part2 += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return "OTP-" + part1 + "-" + part2;
+      }
+
+      function showToast(message, type) {
+        const container = document.getElementById("toastContainer");
+        if (!container) return;
+        const toast = document.createElement("div");
+        const bgClass = type === "error"
+          ? "bg-rose-600 text-white"
+          : type === "warning"
+          ? "bg-amber-500 text-slate-950"
+          : "bg-slate-900 text-white";
+        toast.className = "pointer-events-auto px-4 py-3 rounded-xl shadow-xl border border-white/10 text-xs font-semibold flex items-center justify-between gap-2 transition " + bgClass;
+        toast.innerHTML = "<span>" + message + "</span>";
+        container.appendChild(toast);
+        setTimeout(function() {
+          if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, 3800);
+      }
+
+      function addAuditLog(actor, action, detail) {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, "0");
+        const mm = String(now.getMinutes()).padStart(2, "0");
+        const ss = String(now.getSeconds()).padStart(2, "0");
+        state.auditLogs.unshift({
+          time: TODAY_STR + " " + hh + ":" + mm + ":" + ss,
+          actor: actor,
+          action: action,
+          detail: detail
+        });
+        renderSuperadminAuditLogs();
+      }
+
+      function getActiveStore() {
+        return state.stores.find(function(s) { return s.id === state.activeStoreId; }) || state.stores[0];
+      }
+
+      // ===================================================================
+      // NAVIGATION & VIEW SWITCHING
+      // ===================================================================
+      function switchMainView(viewName) {
+        state.activeView = viewName;
+        const views = {
+          superadmin: document.getElementById("viewSuperadmin"),
+          login: document.getElementById("viewLoginFlow"),
+          crm: document.getElementById("viewStoreCrm"),
+          arch: document.getElementById("viewArchitecture")
+        };
+        const buttons = {
+          superadmin: document.getElementById("modeBtnSuperadmin"),
+          login: document.getElementById("modeBtnLogin"),
+          crm: document.getElementById("modeBtnStoreCrm"),
+          arch: document.getElementById("modeBtnArch")
+        };
+
+        Object.keys(views).forEach(function(k) {
+          if (views[k]) {
+            if (k === viewName) {
+              views[k].classList.remove("hidden");
+            } else {
+              views[k].classList.add("hidden");
+            }
+          }
+          if (buttons[k]) {
+            if (k === viewName) {
+              buttons[k].className = "px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 bg-indigo-600 text-white shadow";
+            } else {
+              buttons[k].className = "px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 text-slate-300 hover:text-white hover:bg-slate-700";
+            }
+          }
+        });
+
+        if (viewName === "superadmin") {
+          renderSuperadminView();
+        } else if (viewName === "login") {
+          renderQuickLoginAccounts();
+        } else if (viewName === "crm") {
+          renderStoreCrmView();
+        }
+      }
+
+      // ===================================================================
+      // SUPERADMIN RENDERING & ACTIONS
+      // ===================================================================
+      function syncStoreExpirationStatus(store) {
+        if (store.status === "BLOCKED") return;
+        if (store.subscriptionExpiresAt < TODAY_STR) {
+          store.status = "EXPIRED";
+        } else {
+          store.status = "ACTIVE";
+        }
+      }
+
+      function renderSuperadminView() {
+        state.stores.forEach(syncStoreExpirationStatus);
+
+        const total = state.stores.length;
+        const activeCount = state.stores.filter(function(s) { return s.status === "ACTIVE"; }).length;
+        const blockedOrExpired = state.stores.filter(function(s) { return s.status !== "ACTIVE"; }).length;
+        const otpPendingCount = state.stores.filter(function(s) { return s.mustChangePassword; }).length;
+        const mrr = state.stores.reduce(function(sum, s) {
+          return sum + (s.status === "ACTIVE" ? (PLAN_PRICES[s.plan] || 0) : 0);
+        }, 0);
+
+        document.getElementById("saKpiTotalStores").textContent = total + " ta";
+        document.getElementById("saKpiOtpPending").textContent = otpPendingCount + " ta do'kon bir martalik parolni yangilashi kutilmoqda";
+        document.getElementById("saKpiActiveStores").textContent = activeCount + " ta";
+        document.getElementById("saKpiBlockedStores").textContent = blockedOrExpired + " ta";
+        document.getElementById("saKpiMrr").textContent = formatUzs(mrr);
+
+        renderSuperadminTable();
+        renderSuperadminAuditLogs();
+        updateOtpShowcaseCard();
+      }
+
+      function updateOtpShowcaseCard(targetStore) {
+        const otpStore = targetStore || state.stores.find(function(s) { return s.mustChangePassword; }) || state.stores[0];
+        if (!otpStore) return;
+        state.pendingPasswordChangeStoreId = otpStore.id;
+        document.getElementById("otpCardStoreName").textContent = otpStore.name;
+        document.getElementById("otpCardSlug").textContent = otpStore.slug;
+        document.getElementById("otpCardLogin").textContent = otpStore.login;
+        document.getElementById("otpCardPassword").textContent = otpStore.password;
+      }
+
+      function renderSuperadminTable() {
+        const tbody = document.getElementById("saStoresTableBody");
+        const query = (document.getElementById("saSearchInput").value || "").toLowerCase().trim();
+        const statusFilter = document.getElementById("saStatusFilter").value;
+
+        const filtered = state.stores.filter(function(s) {
+          const matchesQuery = !query ||
+            s.name.toLowerCase().indexOf(query) !== -1 ||
+            s.owner.toLowerCase().indexOf(query) !== -1 ||
+            s.login.toLowerCase().indexOf(query) !== -1 ||
+            s.tin.indexOf(query) !== -1;
+          const matchesStatus = statusFilter === "ALL" || s.status === statusFilter;
+          return matchesQuery && matchesStatus;
+        });
+
+        tbody.innerHTML = "";
+        if (filtered.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-slate-400 text-sm">Hech qanday do\'kon topilmadi</td></tr>';
+          return;
+        }
+
+        filtered.forEach(function(store) {
+          const tr = document.createElement("tr");
+          tr.className = "hover:bg-slate-50/90 transition";
+
+          let statusBadge = "";
+          if (store.status === "ACTIVE") {
+            statusBadge = '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">● FAOL</span>';
+          } else if (store.status === "BLOCKED") {
+            statusBadge = '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800">⛔ BLOKLANGAN</span>';
+          } else {
+            statusBadge = '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">⚠️ MUDDATI O\'TGAN</span>';
+          }
+
+          const passwordBadge = store.mustChangePassword
+            ? '<div class="inline-flex flex-col"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-semibold text-xs">🔑 Bir martalik: ' + store.password + '</span><span class="text-[11px] text-amber-700 mt-0.5">Kiringanda yangi parol so\'raladi</span></div>'
+            : '<div class="inline-flex flex-col"><span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold text-xs border border-emerald-200">✅ Doimiy parol o\'rnatilgan</span><span class="text-[11px] text-slate-400 mt-0.5 font-mono-code">Argon2id xeshlangan</span></div>';
+
+          const blockBtnLabel = store.status === "BLOCKED" ? "🔓 Blokdan ochish" : "⛔ Vaqtincha bloklash";
+          const blockBtnStyle = store.status === "BLOCKED"
+            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+            : "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100";
+
+          tr.innerHTML =
+            '<td class="py-3.5 px-4">' +
+              '<div class="font-bold text-slate-900">' + store.name + '</div>' +
+              '<div class="text-xs text-slate-500 font-mono-code">' + store.slug + ' • STIR: ' + store.tin + '</div>' +
+            '</td>' +
+            '<td class="py-3.5 px-4">' +
+              '<div class="font-semibold text-slate-800">' + store.owner + '</div>' +
+              '<div class="text-xs text-slate-500">Login: <strong class="font-mono-code text-indigo-600">' + store.login + '</strong> • ' + store.phone + '</div>' +
+            '</td>' +
+            '<td class="py-3.5 px-4">' +
+              '<span class="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-xs">' + store.plan + '</span>' +
+              '<div class="text-[11px] text-slate-500 mt-1">' + formatUzs(PLAN_PRICES[store.plan] || 0) + '/oy</div>' +
+            '</td>' +
+            '<td class="py-3.5 px-4">' + passwordBadge + '</td>' +
+            '<td class="py-3.5 px-4">' +
+              '<div class="flex items-center gap-1.5">' +
+                '<input type="date" data-action="change-expiry" data-id="' + store.id + '" value="' + store.subscriptionExpiresAt + '" class="px-2 py-1 rounded-lg border border-slate-300 text-xs font-mono-code bg-white">' +
+                '<button type="button" data-action="extend-month" data-id="' + store.id + '" class="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold" title="Abonent muddatini +1 oyga uzaytirish">+1 oy</button>' +
+              '</div>' +
+            '</td>' +
+            '<td class="py-3.5 px-4">' + statusBadge + '</td>' +
+            '<td class="py-3.5 px-4 text-right">' +
+              '<div class="inline-flex flex-wrap justify-end gap-1.5">' +
+                '<button type="button" data-action="test-login" data-id="' + store.id + '" class="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">🚪 Kirib sinash</button>' +
+                '<button type="button" data-action="toggle-block" data-id="' + store.id + '" class="px-2.5 py-1.5 rounded-lg border text-xs font-semibold ' + blockBtnStyle + '">' + blockBtnLabel + '</button>' +
+                '<button type="button" data-action="reset-otp" data-id="' + store.id + '" class="px-2.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold" title="Yangi bir martalik parol berish">🔑 Yangi OTP</button>' +
+                '<button type="button" data-action="delete-store" data-id="' + store.id + '" class="px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold">🗑️ O\'chirish</button>' +
+              '</div>' +
+            '</td>';
+
+          tbody.appendChild(tr);
+        });
+      }
+
+      function renderSuperadminAuditLogs() {
+        const list = document.getElementById("saAuditLogList");
+        if (!list) return;
+        list.innerHTML = "";
+        state.auditLogs.forEach(function(item) {
+          const div = document.createElement("div");
+          div.className = "p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-xs";
+          div.innerHTML =
+            '<div class="flex items-center gap-2">' +
+              '<span class="px-2 py-0.5 rounded bg-slate-200 text-slate-800 font-mono-code font-semibold text-[11px]">' + item.action + '</span>' +
+              '<span class="text-slate-700 font-medium">' + item.detail + '</span>' +
+            '</div>' +
+            '<span class="text-slate-400 font-mono-code text-[11px]">' + item.time + '</span>';
+          list.appendChild(div);
+        });
+      }
+
+      // ===================================================================
+      // LOGIN & MANDATORY PASSWORD CHANGE FLOW
+      // ===================================================================
+      function renderQuickLoginAccounts() {
+        const container = document.getElementById("quickLoginAccountsList");
+        if (!container) return;
+        container.innerHTML = "";
+        state.stores.forEach(function(s) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "w-full text-left p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 transition flex items-center justify-between gap-2";
+          const badge = s.mustChangePassword
+            ? '<span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold">OTP Parol</span>'
+            : s.status === "BLOCKED"
+            ? '<span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[10px] font-bold">Bloklangan</span>'
+            : s.status === "EXPIRED"
+            ? '<span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold">Muddati o\'tgan</span>'
+            : '<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">Faol</span>';
+
+          btn.innerHTML =
+            '<div>' +
+              '<div class="font-bold text-xs text-white">' + s.name + '</div>' +
+              '<div class="text-[11px] text-slate-400 font-mono-code">login: ' + s.login + ' | parol: ' + s.password + '</div>' +
+            '</div>' + badge;
+
+          btn.addEventListener("click", function() {
+            document.getElementById("inputLoginUsername").value = s.login;
+            document.getElementById("inputLoginPassword").value = s.password;
+            document.getElementById("loginStepCredentials").classList.remove("hidden");
+            document.getElementById("loginStepForceChange").classList.add("hidden");
+            document.getElementById("loginErrorAlert").classList.add("hidden");
+            showToast(s.name + " kirish ma'lumotlari formaga joylandi", "info");
+          });
+          container.appendChild(btn);
+        });
+      }
+
+      function attemptStoreLogin(username, password) {
+        const cleanUser = (username || "").trim().toLowerCase();
+        const cleanPass = (password || "").trim();
+        const errorBox = document.getElementById("loginErrorAlert");
+        errorBox.classList.add("hidden");
+
+        const store = state.stores.find(function(s) {
+          return s.login.toLowerCase() === cleanUser;
+        });
+
+        if (!store || store.password !== cleanPass) {
+          errorBox.textContent = "❌ Xatolik: Login yoki parol noto'g'ri kiritildi!";
+          errorBox.classList.remove("hidden");
+          return;
+        }
+
+        syncStoreExpirationStatus(store);
+
+        if (store.status === "BLOCKED") {
+          errorBox.innerHTML = "⛔ <strong>Kirish rad etildi (403 Locked):</strong> '" + store.name + "' hisobi Superadmin tomonidan vaqtincha bloklangan!";
+          errorBox.classList.remove("hidden");
+          addAuditLog(store.login, "LOGIN_BLOCKED", "'" + store.name + "' bloklangan holatda kirishga urindi.");
+          return;
+        }
+
+        if (store.status === "EXPIRED") {
+          errorBox.innerHTML = "⚠️ <strong>Abonent to'lovi muddati tugagan (402 Payment Required):</strong> '" + store.name + "' abonent muddati (" + store.subscriptionExpiresAt + ") o'tib ketgan. Superadmin panelidan muddatni uzaytiring.";
+          errorBox.classList.remove("hidden");
+          addAuditLog(store.login, "LOGIN_EXPIRED", "'" + store.name + "' muddati o'tgan obuna bilan kirishga urindi.");
+          return;
+        }
+
+        // Check if One-Time Password (mustChangePassword) is active
+        if (store.mustChangePassword) {
+          state.pendingPasswordChangeStoreId = store.id;
+          document.getElementById("forceChangeStoreTitle").textContent = store.name + " (login: " + store.login + ")";
+          document.getElementById("inputNewStrongPassword").value = "";
+          document.getElementById("inputConfirmStrongPassword").value = "";
+          document.getElementById("forceChangeError").classList.add("hidden");
+          evaluatePasswordStrength("");
+          document.getElementById("loginStepCredentials").classList.add("hidden");
+          document.getElementById("loginStepForceChange").classList.remove("hidden");
+          showToast("Bir martalik parol tasdiqlandi! Endi yangi doimiy parol kiriting.", "warning");
+          return;
+        }
+
+        // Otherwise log straight into the store's HisobGo CRM
+        state.activeStoreId = store.id;
+        addAuditLog(store.login, "LOGIN_SUCCESS", "'" + store.name + "' CRM tizimiga muvaffaqiyatli kirdi.");
+        showToast("Xush kelibsiz! '" + store.name + "' CRM tizimi ochildi.", "info");
+        switchMainView("crm");
+      }
+
+      function evaluatePasswordStrength(pw) {
+        const store = state.stores.find(function(s) { return s.id === state.pendingPasswordChangeStoreId; });
+        const oldOtp = store ? store.password : "";
+        const checks = {
+          len: pw.length >= 8,
+          upper: /[A-Z]/.test(pw),
+          lower: /[a-z]/.test(pw),
+          num: /[0-9]/.test(pw),
+          spec: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw) && pw !== oldOtp
+        };
+
+        function updateItem(id, ok, text) {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.className = "flex items-center gap-1.5 " + (ok ? "text-emerald-700 font-semibold" : "text-slate-500");
+          el.innerHTML = "<span>" + (ok ? "✅" : "⚪") + "</span> " + text;
+        }
+
+        updateItem("reqLen", checks.len, "Kamida 8 ta belgi");
+        updateItem("reqUpper", checks.upper, "Katta harf (A-Z)");
+        updateItem("reqLower", checks.lower, "Kichik harf (a-z)");
+        updateItem("reqNum", checks.num, "Kamida 1 ta raqam (0-9)");
+        updateItem("reqSpec", checks.spec, "Maxsus belgi (!@#$%^&*) va eski OTP dan farqli");
+
+        const score = Object.keys(checks).filter(function(k) { return checks[k]; }).length;
+        const badge = document.getElementById("pwStrengthBadge");
+        if (score === 5) {
+          badge.className = "px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold";
+          badge.textContent = "Кучли (Ishonchli)";
+        } else if (score >= 3) {
+          badge.className = "px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold";
+          badge.textContent = "O'rtacha (" + score + "/5)";
+        } else {
+          badge.className = "px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-semibold";
+          badge.textContent = "Zaif (" + score + "/5)";
+        }
+
+        return score === 5;
+      }
+
+      // ===================================================================
+      // HisobGo CRM & POS RENDERING
+      // ===================================================================
+      function renderStoreCrmView() {
+        const store = getActiveStore();
+        if (!store) return;
+
+        // Populate Store Selector
+        const selector = document.getElementById("crmStoreSelector");
+        selector.innerHTML = "";
+        state.stores.forEach(function(s) {
+          const opt = document.createElement("option");
+          opt.value = s.id;
+          opt.textContent = s.name + " (" + s.status + ")";
+          if (s.id === store.id) opt.selected = true;
+          selector.appendChild(opt);
+        });
+
+        document.getElementById("crmActiveStoreName").textContent = store.name;
+        document.getElementById("crmActiveStorePlan").textContent = store.plan + " Tarif";
+        document.getElementById("crmActiveStoreExpiry").textContent = "Obuna: " + store.subscriptionExpiresAt + " gacha";
+        document.getElementById("crmActiveStoreOwner").textContent = "Egasi: " + store.owner + " • Login: " + store.login + " • STIR: " + store.tin;
+
+        renderCrmDashboard(store);
+        renderCrmPos(store);
+        renderCrmInventory(store);
+        renderCrmCustomers(store);
+        renderCrmReceipts(store);
+      }
+
+      function switchCrmTab(tabId) {
+        state.activeCrmTab = tabId;
+        const tabMap = {
+          dashboard: "crmTabDashboard",
+          pos: "crmTabPos",
+          inventory: "crmTabInventory",
+          customers: "crmTabCustomers",
+          finance: "crmTabFinance"
+        };
+        Object.keys(tabMap).forEach(function(k) {
+          const el = document.getElementById(tabMap[k]);
+          if (el) {
+            if (k === tabId) el.classList.remove("hidden");
+            else el.classList.add("hidden");
+          }
+        });
+        document.querySelectorAll(".crm-tab-btn").forEach(function(btn) {
+          const t = btn.getAttribute("data-crm-tab");
+          if (t === tabId) {
+            btn.className = "crm-tab-btn border-b-2 border-indigo-600 text-indigo-600 px-4 py-2.5 text-xs sm:text-sm font-bold whitespace-nowrap transition";
+          } else {
+            btn.className = "crm-tab-btn border-b-2 border-transparent text-slate-600 hover:text-slate-900 px-4 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap transition";
+          }
+        });
+        if (tabId === "dashboard") {
+          renderCrmDashboard(getActiveStore());
+        }
+      }
+
+      function renderCrmDashboard(store) {
+        const weeklyTotal = store.weeklySales.reduce(function(a, b) { return a + b; }, 0);
+        const receiptsTotal = store.receipts.reduce(function(a, r) { return a + r.total; }, 0);
+        const totalRevenue = weeklyTotal + receiptsTotal;
+        const estProfit = Math.round(totalRevenue * 0.24);
+        const invValue = store.products.reduce(function(sum, p) { return sum + (p.price * p.stock); }, 0);
+        const totalDebt = store.customers.reduce(function(sum, c) { return sum + c.debt; }, 0);
+
+        document.getElementById("crmKpiRevenue").textContent = formatUzs(totalRevenue);
+        document.getElementById("crmKpiProfit").textContent = formatUzs(estProfit);
+        document.getElementById("crmKpiMarginPct").textContent = "O'rtacha ustama marjasi: 24.0%";
+        document.getElementById("crmKpiInventoryVal").textContent = formatUzs(invValue);
+        document.getElementById("crmKpiTotalSkus").textContent = store.products.length + " xil tovar (SKU) mavjud";
+        document.getElementById("crmKpiTotalDebt").textContent = formatUzs(totalDebt);
+        document.getElementById("crmKpiCustomerCount").textContent = "Mijozlar bazasi: " + store.customers.length + " nafar";
+
+        // Low stock list
+        const lowStockContainer = document.getElementById("crmLowStockList");
+        lowStockContainer.innerHTML = "";
+        const lowItems = store.products.filter(function(p) { return p.stock <= 10; });
+        if (lowItems.length === 0) {
+          lowStockContainer.innerHTML = '<div class="text-xs text-emerald-600 font-medium py-4 text-center">Barcha tovarlar zaxirasi yetarli!</div>';
+        } else {
+          lowItems.forEach(function(item) {
+            const div = document.createElement("div");
+            div.className = "p-2.5 rounded-xl bg-amber-50/80 border border-amber-200 flex items-center justify-between text-xs";
+            div.innerHTML =
+              '<div>' +
+                '<div class="font-bold text-slate-900">' + item.name + '</div>' +
+                '<div class="text-slate-500 font-mono-code">SKU: ' + item.sku + '</div>' +
+              '</div>' +
+              '<span class="px-2.5 py-1 rounded-lg bg-amber-200/80 text-amber-950 font-bold">' + item.stock + ' dona qoldi</span>';
+            lowStockContainer.appendChild(div);
+          });
+        }
+
+        // Chart.js Weekly Sales
+        const canvas = document.getElementById("HisobGoSalesChart");
+        if (!canvas || typeof Chart === "undefined") return;
+        const ctx = canvas.getContext("2d");
+        if (salesChartInstance) {
+          salesChartInstance.destroy();
+        }
+        salesChartInstance = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: ["Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba", "Bugun"],
+            datasets: [
+              {
+                label: "Kunlik savdo (so'm)",
+                data: store.weeklySales,
+                backgroundColor: "rgba(79, 70, 229, 0.85)",
+                borderRadius: 8
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  callback: function(value) {
+                    return (value / 1000000).toFixed(1) + " mln";
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+
+      function renderCrmPos(store) {
+        // Populate Category Filter
+        const catSelect = document.getElementById("posCategorySelect");
+        const currentCat = catSelect.value || "ALL";
+        const categories = ["ALL"];
+        store.products.forEach(function(p) {
+          if (categories.indexOf(p.category) === -1) categories.push(p.category);
+        });
+        catSelect.innerHTML = "";
+        categories.forEach(function(c) {
+          const opt = document.createElement("option");
+          opt.value = c;
+          opt.textContent = c === "ALL" ? "Barcha toifalar" : c;
+          if (c === currentCat) opt.selected = true;
+          catSelect.appendChild(opt);
+        });
+
+        // Populate Customer Select
+        const custSelect = document.getElementById("posCustomerSelect");
+        const prevCust = custSelect.value;
+        custSelect.innerHTML = '<option value="WALKIN">Umumiy xaridor (Ro\'yxatdan o\'tmagan)</option>';
+        store.customers.forEach(function(c) {
+          const opt = document.createElement("option");
+          opt.value = c.id;
+          opt.textContent = c.name + " (" + c.phone + " • Nasiya: " + formatUzs(c.debt) + ")";
+          if (c.id === prevCust) opt.selected = true;
+          custSelect.appendChild(opt);
+        });
+
+        // Render Product Cards
+        const query = (document.getElementById("posSearchInput").value || "").toLowerCase().trim();
+        const activeCat = catSelect.value;
+        const grid = document.getElementById("posProductsGrid");
+        grid.innerHTML = "";
+
+        const filteredProducts = store.products.filter(function(p) {
+          const matchQ = !query || p.name.toLowerCase().indexOf(query) !== -1 || p.sku.toLowerCase().indexOf(query) !== -1;
+          const matchC = activeCat === "ALL" || p.category === activeCat;
+          return matchQ && matchC;
+        });
+
+        filteredProducts.forEach(function(prod) {
+          const card = document.createElement("div");
+          card.className = "p-3.5 rounded-xl border border-slate-200 hover:border-indigo-500 bg-slate-50/60 hover:bg-indigo-50/30 transition flex flex-col justify-between gap-2";
+          card.innerHTML =
+            '<div>' +
+              '<div class="flex items-center justify-between text-[11px] text-slate-500 font-mono-code">' +
+                '<span>SKU: ' + prod.sku + '</span>' +
+                '<span class="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-sans">' + prod.category + '</span>' +
+              '</div>' +
+              '<div class="font-bold text-sm text-slate-900 mt-1">' + prod.name + '</div>' +
+            '</div>' +
+            '<div class="flex items-center justify-between pt-2 border-t border-slate-200/80">' +
+              '<div>' +
+                '<div class="font-extrabold text-indigo-600 text-sm">' + formatUzs(prod.price) + '</div>' +
+                '<div class="text-[11px] text-slate-500">Ombor: <strong>' + prod.stock + ' dona</strong></div>' +
+              '</div>' +
+              '<button type="button" data-pos-add="' + prod.sku + '" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">+ Savatga</button>' +
+            '</div>';
+          grid.appendChild(card);
+        });
+
+        renderPosCart(store);
+      }
+
+      function renderPosCart(store) {
+        const cartList = document.getElementById("posCartItemsList");
+        cartList.innerHTML = "";
+
+        let subtotal = 0;
+        if (state.posCart.length === 0) {
+          cartList.innerHTML = '<div class="py-8 text-center text-xs text-slate-400">Savat bo\'sh. Chap tarafdan tovar tanlang.</div>';
+        } else {
+          state.posCart.forEach(function(item) {
+            const prod = store.products.find(function(p) { return p.sku === item.sku; });
+            if (!prod) return;
+            const lineTotal = prod.price * item.qty;
+            subtotal += lineTotal;
+
+            const row = document.createElement("div");
+            row.className = "p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 text-xs";
+            row.innerHTML =
+              '<div class="flex-1">' +
+                '<div class="font-bold text-slate-900">' + prod.name + '</div>' +
+                '<div class="text-slate-500">' + formatUzs(prod.price) + ' × ' + item.qty + ' = <strong class="text-slate-900">' + formatUzs(lineTotal) + '</strong></div>' +
+              '</div>' +
+              '<div class="flex items-center gap-1">' +
+                '<button type="button" data-cart-dec="' + prod.sku + '" class="w-6 h-6 rounded bg-slate-200 hover:bg-slate-300 font-bold">-</button>' +
+                '<span class="w-6 text-center font-bold">' + item.qty + '</span>' +
+                '<button type="button" data-cart-inc="' + prod.sku + '" class="w-6 h-6 rounded bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold">+</button>' +
+              '</div>';
+            cartList.appendChild(row);
+          });
+        }
+
+        const discountPct = Math.min(50, Math.max(0, Number(document.getElementById("posDiscountInput").value) || 0));
+        const discountAmount = Math.round(subtotal * (discountPct / 100));
+        const finalTotal = Math.max(0, subtotal - discountAmount);
+
+        document.getElementById("posSubtotalText").textContent = formatUzs(subtotal);
+        document.getElementById("posDiscountText").textContent = "-" + formatUzs(discountAmount);
+        document.getElementById("posTotalText").textContent = formatUzs(finalTotal);
+      }
+
+      function renderCrmInventory(store) {
+        const tbody = document.getElementById("crmInventoryTableBody");
+        tbody.innerHTML = "";
+        store.products.forEach(function(p) {
+          const margin = p.cost > 0 ? Math.round(((p.price - p.cost) / p.cost) * 100) : 0;
+          const stockBadge = p.stock <= 10
+            ? '<span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 font-bold text-xs">⚠️ ' + p.stock + ' dona</span>'
+            : '<span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs">' + p.stock + ' dona</span>';
+
+          const tr = document.createElement("tr");
+          tr.className = "hover:bg-slate-50";
+          tr.innerHTML =
+            '<td class="py-3 px-4 font-mono-code text-xs text-slate-600">' + p.sku + '</td>' +
+            '<td class="py-3 px-4 font-bold text-slate-900">' + p.name + '</td>' +
+            '<td class="py-3 px-4 text-xs text-slate-600">' + p.category + '</td>' +
+            '<td class="py-3 px-4 text-right text-slate-600">' + formatUzs(p.cost) + '</td>' +
+            '<td class="py-3 px-4 text-right font-bold text-slate-900">' + formatUzs(p.price) + '</td>' +
+            '<td class="py-3 px-4 text-right text-emerald-600 font-semibold">+' + margin + '%</td>' +
+            '<td class="py-3 px-4 text-center">' + stockBadge + '</td>' +
+            '<td class="py-3 px-4 text-right">' +
+              '<button type="button" data-restock-sku="' + p.sku + '" class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs">+10 kirim</button>' +
+            '</td>';
+          tbody.appendChild(tr);
+        });
+      }
+
+      function renderCrmCustomers(store) {
+        const tbody = document.getElementById("crmCustomersTableBody");
+        tbody.innerHTML = "";
+        store.customers.forEach(function(c) {
+          const debtBadge = c.debt > 0
+            ? '<span class="px-2.5 py-1 rounded-lg bg-rose-100 text-rose-800 font-bold text-xs">' + formatUzs(c.debt) + '</span>'
+            : '<span class="text-xs text-slate-400">Qarzi yo\'q</span>';
+
+          const payDebtBtn = c.debt > 0
+            ? '<button type="button" data-pay-debt="' + c.id + '" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold">💵 Qarzni so\'ndirish</button>'
+            : '<span class="text-xs text-emerald-600 font-medium">To\'langan</span>';
+
+          const tr = document.createElement("tr");
+          tr.className = "hover:bg-slate-50";
+          tr.innerHTML =
+            '<td class="py-3 px-4 font-bold text-slate-900">' + c.name + '</td>' +
+            '<td class="py-3 px-4 text-slate-600 text-xs">' + c.phone + '</td>' +
+            '<td class="py-3 px-4 text-right font-semibold">' + formatUzs(c.totalSpent) + '</td>' +
+            '<td class="py-3 px-4 text-right text-indigo-600 font-semibold">' + formatUzs(c.cashback) + '</td>' +
+            '<td class="py-3 px-4 text-right">' + debtBadge + '</td>' +
+            '<td class="py-3 px-4 text-right">' + payDebtBtn + '</td>';
+          tbody.appendChild(tr);
+        });
+      }
+
+      function renderCrmReceipts(store) {
+        const tbody = document.getElementById("crmReceiptsTableBody");
+        tbody.innerHTML = "";
+        if (store.receipts.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-400 text-xs">Hozircha cheklar mavjud emas</td></tr>';
+          return;
+        }
+        store.receipts.forEach(function(r) {
+          const tr = document.createElement("tr");
+          tr.className = "hover:bg-slate-50";
+          tr.innerHTML =
+            '<td class="py-3 px-4 font-mono-code font-bold text-xs text-indigo-600">' + r.id + '</td>' +
+            '<td class="py-3 px-4 text-xs text-slate-500">' + r.time + '</td>' +
+            '<td class="py-3 px-4 font-semibold text-slate-800">' + r.customer + '</td>' +
+            '<td class="py-3 px-4 text-xs text-slate-600">' + r.items + '</td>' +
+            '<td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-semibold">' + r.method + '</span></td>' +
+            '<td class="py-3 px-4 text-right font-bold text-slate-900">' + formatUzs(r.total) + '</td>';
+          tbody.appendChild(tr);
+        });
+      }
+
+      // ===================================================================
+      // EVENT LISTENERS & HANDLERS
+      // ===================================================================
+      function initEvents() {
+        // Top Mode Switchers
+        document.getElementById("modeBtnSuperadmin").addEventListener("click", function() { switchMainView("superadmin"); });
+        document.getElementById("modeBtnLogin").addEventListener("click", function() { switchMainView("login"); });
+        document.getElementById("modeBtnStoreCrm").addEventListener("click", function() { switchMainView("crm"); });
+        document.getElementById("modeBtnArch").addEventListener("click", function() { switchMainView("arch"); });
+
+        // Superadmin Search & Filter
+        document.getElementById("saSearchInput").addEventListener("input", renderSuperadminTable);
+        document.getElementById("saStatusFilter").addEventListener("change", renderSuperadminTable);
+
+        // Superadmin Table Delegated Actions
+        document.getElementById("saStoresTableBody").addEventListener("click", function(e) {
+          const btn = e.target.closest("button[data-action]");
+          if (!btn) return;
+          const action = btn.getAttribute("data-action");
+          const storeId = btn.getAttribute("data-id");
+          const store = state.stores.find(function(s) { return s.id === storeId; });
+          if (!store) return;
+
+          if (action === "toggle-block") {
+            if (store.status === "BLOCKED") {
+              store.status = store.subscriptionExpiresAt < TODAY_STR ? "EXPIRED" : "ACTIVE";
+              addAuditLog("superadmin", "UNBLOCK_STORE", "'" + store.name + "' blokdan chiqarildi (status: " + store.status + ").");
+              showToast("'" + store.name + "' hisobi faollashtirildi!", "info");
+            } else {
+              store.status = "BLOCKED";
+              addAuditLog("superadmin", "BLOCK_STORE", "'" + store.name + "' hisobi vaqtincha bloklandi.");
+              showToast("'" + store.name + "' hisobi vaqtincha bloklandi!", "warning");
+            }
+            renderSuperadminView();
+          } else if (action === "extend-month") {
+            const parts = store.subscriptionExpiresAt.split("-");
+            const dt = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+            dt.setMonth(dt.getMonth() + 1);
+            const yyyy = dt.getFullYear();
+            const mm = String(dt.getMonth() + 1).padStart(2, "0");
+            const dd = String(dt.getDate()).padStart(2, "0");
+            store.subscriptionExpiresAt = yyyy + "-" + mm + "-" + dd;
+            syncStoreExpirationStatus(store);
+            addAuditLog("superadmin", "EXTEND_SUBSCRIPTION", "'" + store.name + "' abonent to'lovi muddati " + store.subscriptionExpiresAt + " gacha uzaytirildi.");
+            showToast("'" + store.name + "' obunasi " + store.subscriptionExpiresAt + " gacha uzaytirildi!", "info");
+            renderSuperadminView();
+          } else if (action === "reset-otp") {
+            const newOtp = generateRandomOtp();
+            store.password = newOtp;
+            store.mustChangePassword = true;
+            updateOtpShowcaseCard(store);
+            addAuditLog("superadmin", "ISSUE_OTP", "'" + store.name + "' uchun yangi bir martalik parol (" + newOtp + ") yaratildi.");
+            showToast("'" + store.name + "' uchun bir martalik parol berildi: " + newOtp, "warning");
+            renderSuperadminView();
+          } else if (action === "delete-store") {
+            if (state.stores.length <= 1) {
+              showToast("Tizimda kamida 1 ta do'kon qolishi kerak!", "error");
+              return;
+            }
+            state.stores = state.stores.filter(function(s) { return s.id !== storeId; });
+            if (state.activeStoreId === storeId) {
+              state.activeStoreId = state.stores[0].id;
+            }
+            addAuditLog("superadmin", "DELETE_STORE", "'" + store.name + "' (" + store.slug + ") tizimdan o'chirildi.");
+            showToast("'" + store.name + "' hisobi o'chirildi.", "error");
+            renderSuperadminView();
+          } else if (action === "test-login") {
+            switchMainView("login");
+            document.getElementById("inputLoginUsername").value = store.login;
+            document.getElementById("inputLoginPassword").value = store.password;
+            document.getElementById("loginStepCredentials").classList.remove("hidden");
+            document.getElementById("loginStepForceChange").classList.add("hidden");
+            attemptStoreLogin(store.login, store.password);
+          }
+        });
+
+        // Superadmin Table Date Input Change
+        document.getElementById("saStoresTableBody").addEventListener("change", function(e) {
+          const input = e.target.closest("input[data-action='change-expiry']");
+          if (!input) return;
+          const storeId = input.getAttribute("data-id");
+          const store = state.stores.find(function(s) { return s.id === storeId; });
+          if (!store || !input.value) return;
+          store.subscriptionExpiresAt = input.value;
+          syncStoreExpirationStatus(store);
+          addAuditLog("superadmin", "SET_SUBSCRIPTION_DATE", "'" + store.name + "' abonent to'lovi sanasi " + input.value + " etib belgilandi.");
+          showToast("'" + store.name + "' abonent sanasi yangilandi: " + input.value, "info");
+          renderSuperadminView();
+        });
+
+        // Create Store Modal
+        const modalCreate = document.getElementById("modalCreateStore");
+        document.getElementById("btnOpenCreateStore").addEventListener("click", function() {
+          document.getElementById("newStoreOtp").value = generateRandomOtp();
+          modalCreate.classList.remove("hidden");
+        });
+        document.getElementById("btnCloseCreateStore").addEventListener("click", function() {
+          modalCreate.classList.add("hidden");
+        });
+        document.getElementById("btnCancelCreateStore").addEventListener("click", function() {
+          modalCreate.classList.add("hidden");
+        });
+        document.getElementById("btnRegenerateOtp").addEventListener("click", function() {
+          document.getElementById("newStoreOtp").value = generateRandomOtp();
+        });
+
+        document.getElementById("formCreateStore").addEventListener("submit", function(e) {
+          e.preventDefault();
+          const name = document.getElementById("newStoreName").value.trim();
+          const tin = document.getElementById("newStoreTin").value.trim();
+          const owner = document.getElementById("newStoreOwner").value.trim();
+          const phone = document.getElementById("newStorePhone").value.trim();
+          const login = document.getElementById("newStoreLogin").value.trim().toLowerCase();
+          const plan = document.getElementById("newStorePlan").value;
+          const expiry = document.getElementById("newStoreExpiry").value;
+          const otp = document.getElementById("newStoreOtp").value.trim();
+
+          if (!name || !login) return;
+          if (state.stores.some(function(s) { return s.login.toLowerCase() === login; })) {
+            showToast("Bunday login band! Boshqa login kiriting.", "error");
+            return;
+          }
+
+          const newStore = {
+            id: "store-" + (Date.now()),
+            slug: "TENANT-" + (100 + state.stores.length + 1),
+            name: name,
+            tin: tin,
+            owner: owner,
+            phone: phone,
+            login: login,
+            password: otp,
+            mustChangePassword: true,
+            plan: plan,
+            subscriptionExpiresAt: expiry,
+            status: expiry < TODAY_STR ? "EXPIRED" : "ACTIVE",
+            weeklySales: [1500000, 1800000, 2100000, 1950000, 2400000, 2900000, 2600000],
+            products: [
+              { sku: "10001", name: "Boshlang'ich Namuna Tovar", category: "Asosiy", cost: 25000, price: 35000, stock: 20 }
+            ],
+            customers: [
+              { id: "cust-1", name: "Doimiy Mijoz", phone: phone, totalSpent: 350000, cashback: 10500, debt: 0 }
+            ],
+            receipts: []
+          };
+
+          state.stores.unshift(newStore);
+          modalCreate.classList.add("hidden");
+          document.getElementById("formCreateStore").reset();
+          updateOtpShowcaseCard(newStore);
+          addAuditLog("superadmin", "CREATE_STORE_OTP", "'" + newStore.name + "' yaratildi. Login: " + newStore.login + ", OTP: " + newStore.password);
+          renderSuperadminView();
+          showToast("'" + newStore.name + "' qo'shildi! Bir martalik parol: " + newStore.password, "info");
+        });
+
+        // Copy OTP & Simulate OTP Login Buttons
+        document.getElementById("btnCopyOtpCredentials").addEventListener("click", function() {
+          const login = document.getElementById("otpCardLogin").textContent;
+          const pass = document.getElementById("otpCardPassword").textContent;
+          const text = "Login: " + login + " | Bir martalik parol (OTP): " + pass;
+          try {
+            navigator.clipboard.writeText(text);
+          } catch (err) {}
+          showToast("Nusxalandi: " + text, "info");
+        });
+
+        document.getElementById("btnSimulateOtpLogin").addEventListener("click", function() {
+          const login = document.getElementById("otpCardLogin").textContent;
+          const pass = document.getElementById("otpCardPassword").textContent;
+          switchMainView("login");
+          document.getElementById("inputLoginUsername").value = login;
+          document.getElementById("inputLoginPassword").value = pass;
+          attemptStoreLogin(login, pass);
+        });
+
+        // Login Form Submit
+        document.getElementById("formStoreLogin").addEventListener("submit", function(e) {
+          e.preventDefault();
+          const u = document.getElementById("inputLoginUsername").value;
+          const p = document.getElementById("inputLoginPassword").value;
+          attemptStoreLogin(u, p);
+        });
+
+        // Password Strength Live Check
+        document.getElementById("inputNewStrongPassword").addEventListener("input", function(e) {
+          evaluatePasswordStrength(e.target.value);
+        });
+
+        document.getElementById("btnFillSampleStrongPw").addEventListener("click", function() {
+          const sample = "HisobGo#2026!";
+          document.getElementById("inputNewStrongPassword").value = sample;
+          document.getElementById("inputConfirmStrongPassword").value = sample;
+          evaluatePasswordStrength(sample);
+        });
+
+        // Mandatory Password Change Submit
+        document.getElementById("formForcePasswordChange").addEventListener("submit", function(e) {
+          e.preventDefault();
+          const newPw = document.getElementById("inputNewStrongPassword").value;
+          const confirmPw = document.getElementById("inputConfirmStrongPassword").value;
+          const errEl = document.getElementById("forceChangeError");
+          errEl.classList.add("hidden");
+
+          if (!evaluatePasswordStrength(newPw)) {
+            errEl.textContent = "Yangi parol barcha 5 ta xavfsizlik talabiga javob berishi shart!";
+            errEl.classList.remove("hidden");
+            return;
+          }
+          if (newPw !== confirmPw) {
+            errEl.textContent = "Kiritilgan parollar bir-biriga mos kelmadi!";
+            errEl.classList.remove("hidden");
+            return;
+          }
+
+          const store = state.stores.find(function(s) { return s.id === state.pendingPasswordChangeStoreId; });
+          if (!store) return;
+
+          store.password = newPw;
+          store.mustChangePassword = false;
+          state.activeStoreId = store.id;
+
+          addAuditLog(store.login, "OTP_PASSWORD_CHANGED", "'" + store.name + "' egasi bir martalik parolni yangi doimiy parolga almashtirdi.");
+          showToast("Yangi ishonchli parol o'rnatildi! CRM tizimiga xush kelibsiz.", "info");
+          switchMainView("crm");
+        });
+
+        // CRM Store Selector & Tabs
+        document.getElementById("crmStoreSelector").addEventListener("change", function(e) {
+          state.activeStoreId = e.target.value;
+          state.posCart = [];
+          renderStoreCrmView();
+        });
+
+        document.querySelectorAll(".crm-tab-btn").forEach(function(btn) {
+          btn.addEventListener("click", function() {
+            switchCrmTab(btn.getAttribute("data-crm-tab"));
+          });
+        });
+
+        document.getElementById("btnGoToPosFromDash").addEventListener("click", function() {
+          switchCrmTab("pos");
+        });
+        document.getElementById("btnGoToInventoryFromDash").addEventListener("click", function() {
+          switchCrmTab("inventory");
+        });
+
+        // POS Search, Category & Cart
+        document.getElementById("posSearchInput").addEventListener("input", function() {
+          renderCrmPos(getActiveStore());
+        });
+        document.getElementById("posCategorySelect").addEventListener("change", function() {
+          renderCrmPos(getActiveStore());
+        });
+        document.getElementById("posDiscountInput").addEventListener("input", function() {
+          renderPosCart(getActiveStore());
+        });
+
+        document.getElementById("posProductsGrid").addEventListener("click", function(e) {
+          const btn = e.target.closest("button[data-pos-add]");
+          if (!btn) return;
+          const sku = btn.getAttribute("data-pos-add");
+          const store = getActiveStore();
+          const prod = store.products.find(function(p) { return p.sku === sku; });
+          if (!prod) return;
+          if (prod.stock <= 0) {
+            showToast("Omborda bu tovardan qolmagan!", "error");
+            return;
+          }
+          const existing = state.posCart.find(function(item) { return item.sku === sku; });
+          if (existing) {
+            if (existing.qty + 1 > prod.stock) {
+              showToast("Ombordagi qoldiqdan ko'p qo'shib bo'lmaydi!", "warning");
+              return;
+            }
+            existing.qty += 1;
+          } else {
+            state.posCart.push({ sku: sku, qty: 1 });
+          }
+          renderPosCart(store);
+        });
+
+        document.getElementById("posCartItemsList").addEventListener("click", function(e) {
+          const incBtn = e.target.closest("button[data-cart-inc]");
+          const decBtn = e.target.closest("button[data-cart-dec]");
+          const store = getActiveStore();
+          if (incBtn) {
+            const sku = incBtn.getAttribute("data-cart-inc");
+            const prod = store.products.find(function(p) { return p.sku === sku; });
+            const item = state.posCart.find(function(i) { return i.sku === sku; });
+            if (item && prod && item.qty < prod.stock) {
+              item.qty += 1;
+              renderPosCart(store);
+            }
+          } else if (decBtn) {
+            const sku = decBtn.getAttribute("data-cart-dec");
+            const item = state.posCart.find(function(i) { return i.sku === sku; });
+            if (item) {
+              item.qty -= 1;
+              if (item.qty <= 0) {
+                state.posCart = state.posCart.filter(function(i) { return i.sku !== sku; });
+              }
+              renderPosCart(store);
+            }
+          }
+        });
+
+        document.getElementById("btnClearPosCart").addEventListener("click", function() {
+          state.posCart = [];
+          renderPosCart(getActiveStore());
+        });
+
+        document.getElementById("posPaymentMethodGroup").addEventListener("click", function(e) {
+          const btn = e.target.closest("button[data-pay-method]");
+          if (!btn) return;
+          state.selectedPosPayment = btn.getAttribute("data-pay-method");
+          document.querySelectorAll(".pos-pay-btn").forEach(function(b) {
+            if (b.getAttribute("data-pay-method") === state.selectedPosPayment) {
+              b.className = "pos-pay-btn py-2 px-2 rounded-xl text-xs font-bold border bg-indigo-600 text-white border-indigo-600";
+            } else {
+              b.className = "pos-pay-btn py-2 px-2 rounded-xl text-xs font-semibold border bg-white text-slate-700 border-slate-300";
+            }
+          });
+        });
+
+        document.getElementById("btnCompletePosSale").addEventListener("click", function() {
+          const store = getActiveStore();
+          if (state.posCart.length === 0) {
+            showToast("Savat bo'sh! Avval tovar qo'shing.", "error");
+            return;
+          }
+
+          const custId = document.getElementById("posCustomerSelect").value;
+          const customerObj = store.customers.find(function(c) { return c.id === custId; });
+          if (state.selectedPosPayment === "Nasiya" && !customerObj) {
+            showToast("Nasiya savdo uchun ro'yxatdan o'tgan mijozni tanlang!", "warning");
+            return;
+          }
+
+          let subtotal = 0;
+          let totalCost = 0;
+          const summaryParts = [];
+
+          state.posCart.forEach(function(item) {
+            const prod = store.products.find(function(p) { return p.sku === item.sku; });
+            if (!prod) return;
+            subtotal += prod.price * item.qty;
+            totalCost += prod.cost * item.qty;
+            prod.stock = Math.max(0, prod.stock - item.qty);
+            summaryParts.push(prod.name + " x" + item.qty);
+          });
+
+          const discountPct = Math.min(50, Math.max(0, Number(document.getElementById("posDiscountInput").value) || 0));
+          const finalTotal = Math.round(subtotal * (1 - discountPct / 100));
+          const profit = Math.max(0, finalTotal - totalCost);
+
+          if (customerObj) {
+            customerObj.totalSpent += finalTotal;
+            customerObj.cashback += Math.round(finalTotal * 0.03);
+            if (state.selectedPosPayment === "Nasiya") {
+              customerObj.debt += finalTotal;
+            }
+          }
+
+          store.weeklySales[6] += finalTotal;
+          const chkId = "CHK-" + Math.floor(1000 + Math.random() * 9000);
+          store.receipts.unshift({
+            id: chkId,
+            time: TODAY_STR + " " + new Date().toTimeString().slice(0, 5),
+            customer: customerObj ? customerObj.name : "Umumiy xaridor",
+            items: summaryParts.join(", "),
+            method: state.selectedPosPayment,
+            total: finalTotal,
+            profit: profit
+          });
+
+          state.posCart = [];
+          document.getElementById("posDiscountInput").value = "0";
+          renderStoreCrmView();
+          showToast("Chek " + chkId + " rasmiylashtirildi! Summa: " + formatUzs(finalTotal), "info");
+        });
+
+        // Inventory Restock & Add Product Modal
+        document.getElementById("crmInventoryTableBody").addEventListener("click", function(e) {
+          const btn = e.target.closest("button[data-restock-sku]");
+          if (!btn) return;
+          const sku = btn.getAttribute("data-restock-sku");
+          const store = getActiveStore();
+          const prod = store.products.find(function(p) { return p.sku === sku; });
+          if (prod) {
+            prod.stock += 10;
+            renderStoreCrmView();
+            showToast(prod.name + " qoldig'iga +10 dona kirim qilindi!", "info");
+          }
+        });
+
+        const modalProd = document.getElementById("modalAddProduct");
+        document.getElementById("btnOpenAddProductModal").addEventListener("click", function() {
+          modalProd.classList.remove("hidden");
+        });
+        document.getElementById("btnCloseAddProduct").addEventListener("click", function() {
+          modalProd.classList.add("hidden");
+        });
+        document.getElementById("btnCancelAddProduct").addEventListener("click", function() {
+          modalProd.classList.add("hidden");
+        });
+        document.getElementById("formAddProduct").addEventListener("submit", function(e) {
+          e.preventDefault();
+          const store = getActiveStore();
+          const name = document.getElementById("prodNameInput").value.trim();
+          const sku = document.getElementById("prodSkuInput").value.trim();
+          const cat = document.getElementById("prodCatInput").value.trim();
+          const cost = Number(document.getElementById("prodCostInput").value) || 0;
+          const price = Number(document.getElementById("prodPriceInput").value) || 0;
+          const stock = Number(document.getElementById("prodStockInput").value) || 0;
+          if (!name || !sku) return;
+          store.products.unshift({ sku: sku, name: name, category: cat, cost: cost, price: price, stock: stock });
+          modalProd.classList.add("hidden");
+          document.getElementById("formAddProduct").reset();
+          renderStoreCrmView();
+          showToast("Yangi tovar qo'shildi: " + name, "info");
+        });
+
+        // Customers Add & Debt Payment
+        const modalCust = document.getElementById("modalAddCustomer");
+        document.getElementById("btnOpenAddCustomerModal").addEventListener("click", function() {
+          modalCust.classList.remove("hidden");
+        });
+        document.getElementById("btnCloseAddCustomer").addEventListener("click", function() {
+          modalCust.classList.add("hidden");
+        });
+        document.getElementById("btnCancelAddCustomer").addEventListener("click", function() {
+          modalCust.classList.add("hidden");
+        });
+        document.getElementById("formAddCustomer").addEventListener("submit", function(e) {
+          e.preventDefault();
+          const store = getActiveStore();
+          const name = document.getElementById("custNameInput").value.trim();
+          const phone = document.getElementById("custPhoneInput").value.trim();
+          if (!name) return;
+          store.customers.unshift({
+            id: "c-" + Date.now(),
+            name: name,
+            phone: phone,
+            totalSpent: 0,
+            cashback: 0,
+            debt: 0
+          });
+          modalCust.classList.add("hidden");
+          document.getElementById("formAddCustomer").reset();
+          renderStoreCrmView();
+          showToast("Yangi mijoz qo'shildi: " + name, "info");
+        });
+
+        document.getElementById("crmCustomersTableBody").addEventListener("click", function(e) {
+          const btn = e.target.closest("button[data-pay-debt]");
+          if (!btn) return;
+          const custId = btn.getAttribute("data-pay-debt");
+          const store = getActiveStore();
+          const cust = store.customers.find(function(c) { return c.id === custId; });
+          if (cust && cust.debt > 0) {
+            const paid = cust.debt;
+            cust.debt = 0;
+            renderStoreCrmView();
+            showToast(cust.name + "ning " + formatUzs(paid) + " nasiya qarzi to'liq so'ndirildi!", "info");
+          }
+        });
+
+        // Copy Git Commands
+        document.getElementById("btnCopyGitCommands").addEventListener("click", function() {
+          const txt = document.getElementById("gitCommandsBlock").textContent;
+          try {
+            navigator.clipboard.writeText(txt);
+          } catch (err) {}
+          showToast("GitHub push buyruqlari nusxalandi!", "info");
+        });
+      }
+
+      window.addEventListener("DOMContentLoaded", function() {
+        initEvents();
+        renderSuperadminView();
+      });
+    })();
+  </script>
+</body>
+</html>
