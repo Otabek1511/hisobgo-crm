@@ -39,5 +39,5 @@ docker compose up --build
 
 ## Muhim eslatmalar
 
-- `frontend/index.html` hozircha **mustaqil demo**: ma'lumotlar brauzer xotirasida, API'ga ulanmagan. Sahifadagi "2FA tasdiqlangan", IP, "SHA-256 chain", "PostgreSQL RLS" yozuvlari demo matni; backendda tenant izolyatsiyasi `store_id` filtri orqali amalga oshirilgan, RLS yoqilmagan.
+- `frontend/index.html` haqiqiy API ga ulangan (bitta fayl, Tailwind CDN). API manzili: `localhost` da `http://localhost:8000`, aks holda `https://hisobgo-api.onrender.com` (faylning boshidagi `API` o'zgaruvchisida). Tenant izolyatsiyasi backendda `store_id` filtri orqali amalga oshirilgan; PostgreSQL RLS yoqilmagan.
 - Production'da `ENV=production` (standart) bo'lib, `JWT_SECRET` va `SUPERADMIN_SECRET_KEY` majburiy; `CORS_ORIGINS` ni frontend manziliga qo'ying.
