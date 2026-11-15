@@ -1015,11 +1015,19 @@ gh repo create Otabek1511/hisobgo-crm --public --source=. --remote=origin --push
           ? "bg-amber-500 text-slate-950"
           : "bg-slate-900 text-white";
         toast.className = "pointer-events-auto px-4 py-3 rounded-xl shadow-xl border border-white/10 text-xs font-semibold flex items-center justify-between gap-2 transition " + bgClass;
-        toast.innerHTML = "<span>" + message + "</span>";
+        const span = document.createElement("span");
+        span.textContent = message;
+        toast.appendChild(span);
         container.appendChild(toast);
         setTimeout(function() {
           if (toast.parentNode) toast.parentNode.removeChild(toast);
         }, 3800);
+      }
+
+      function esc(v) {
+        return String(v == null ? "" : v).replace(/[&<>"']/g, function(ch) {
+          return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+        });
       }
 
       function addAuditLog(actor, action, detail) {
@@ -1163,7 +1171,7 @@ gh repo create Otabek1511/hisobgo-crm --public --source=. --remote=origin --push
           }
 
           const passwordBadge = store.mustChangePassword
-            ? '<div class="inline-flex flex-col"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-semibold text-xs">🔑 Bir martalik: ' + store.password + '</span><span class="text-[11px] text-amber-700 mt-0.5">Kiringanda yangi parol so\'raladi</span></div>'
+            ? '<div class="inline-flex flex-col"><span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-semibold text-xs">🔑 Bir martalik: ' + esc(store.password) + '</span><span class="text-[11px] text-amber-700 mt-0.5">Kiringanda yangi parol so\'raladi</span></div>'
             : '<div class="inline-flex flex-col"><span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold text-xs border border-emerald-200">✅ Doimiy parol o\'rnatilgan</span><span class="text-[11px] text-slate-400 mt-0.5 font-mono-code">Argon2id xeshlangan</span></div>';
 
           const blockBtnLabel = store.status === "BLOCKED" ? "🔓 Blokdan ochish" : "⛔ Vaqtincha bloklash";
@@ -1173,31 +1181,31 @@ gh repo create Otabek1511/hisobgo-crm --public --source=. --remote=origin --push
 
           tr.innerHTML =
             '<td class="py-3.5 px-4">' +
-              '<div class="font-bold text-slate-900">' + store.name + '</div>' +
-              '<div class="text-xs text-slate-500 font-mono-code">' + store.slug + ' • STIR: ' + store.tin + '</div>' +
+              '<div class="font-bold text-slate-900">' + esc(store.name) + '</div>' +
+              '<div class="text-xs text-slate-500 font-mono-code">' + esc(store.slug) + ' • STIR: ' + esc(store.tin) + '</div>' +
             '</td>' +
             '<td class="py-3.5 px-4">' +
-              '<div class="font-semibold text-slate-800">' + store.owner + '</div>' +
-              '<div class="text-xs text-slate-500">Login: <strong class="font-mono-code text-indigo-600">' + store.login + '</strong> • ' + store.phone + '</div>' +
+              '<div class="font-semibold text-slate-800">' + esc(store.owner) + '</div>' +
+              '<div class="text-xs text-slate-500">Login: <strong class="font-mono-code text-indigo-600">' + esc(store.login) + '</strong> • ' + esc(store.phone) + '</div>' +
             '</td>' +
             '<td class="py-3.5 px-4">' +
-              '<span class="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-xs">' + store.plan + '</span>' +
+              '<span class="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-xs">' + esc(store.plan) + '</span>' +
               '<div class="text-[11px] text-slate-500 mt-1">' + formatUzs(PLAN_PRICES[store.plan] || 0) + '/oy</div>' +
             '</td>' +
             '<td class="py-3.5 px-4">' + passwordBadge + '</td>' +
             '<td class="py-3.5 px-4">' +
               '<div class="flex items-center gap-1.5">' +
-                '<input type="date" data-action="change-expiry" data-id="' + store.id + '" value="' + store.subscriptionExpiresAt + '" class="px-2 py-1 rounded-lg border border-slate-300 text-xs font-mono-code bg-white">' +
-                '<button type="button" data-action="extend-month" data-id="' + store.id + '" class="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold" title="Abonent muddatini +1 oyga uzaytirish">+1 oy</button>' +
+                '<input type="date" data-action="change-expiry" data-id="' + esc(store.id) + '" value="' + esc(store.subscriptionExpiresAt) + '" class="px-2 py-1 rounded-lg border border-slate-300 text-xs font-mono-code bg-white">' +
+                '<button type="button" data-action="extend-month" data-id="' + esc(store.id) + '" class="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold" title="Abonent muddatini +1 oyga uzaytirish">+1 oy</button>' +
               '</div>' +
             '</td>' +
             '<td class="py-3.5 px-4">' + statusBadge + '</td>' +
             '<td class="py-3.5 px-4 text-right">' +
               '<div class="inline-flex flex-wrap justify-end gap-1.5">' +
-                '<button type="button" data-action="test-login" data-id="' + store.id + '" class="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">🚪 Kirib sinash</button>' +
-                '<button type="button" data-action="toggle-block" data-id="' + store.id + '" class="px-2.5 py-1.5 rounded-lg border text-xs font-semibold ' + blockBtnStyle + '">' + blockBtnLabel + '</button>' +
-                '<button type="button" data-action="reset-otp" data-id="' + store.id + '" class="px-2.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold" title="Yangi bir martalik parol berish">🔑 Yangi OTP</button>' +
-                '<button type="button" data-action="delete-store" data-id="' + store.id + '" class="px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold">🗑️ O\'chirish</button>' +
+                '<button type="button" data-action="test-login" data-id="' + esc(store.id) + '" class="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">🚪 Kirib sinash</button>' +
+                '<button type="button" data-action="toggle-block" data-id="' + esc(store.id) + '" class="px-2.5 py-1.5 rounded-lg border text-xs font-semibold ' + blockBtnStyle + '">' + blockBtnLabel + '</button>' +
+                '<button type="button" data-action="reset-otp" data-id="' + esc(store.id) + '" class="px-2.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold" title="Yangi bir martalik parol berish">🔑 Yangi OTP</button>' +
+                '<button type="button" data-action="delete-store" data-id="' + esc(store.id) + '" class="px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold">🗑️ O\'chirish</button>' +
               '</div>' +
             '</td>';
 
@@ -1214,10 +1222,10 @@ gh repo create Otabek1511/hisobgo-crm --public --source=. --remote=origin --push
           div.className = "p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-xs";
           div.innerHTML =
             '<div class="flex items-center gap-2">' +
-              '<span class="px-2 py-0.5 rounded bg-slate-200 text-slate-800 font-mono-code font-semibold text-[11px]">' + item.action + '</span>' +
-              '<span class="text-slate-700 font-medium">' + item.detail + '</span>' +
+              '<span class="px-2 py-0.5 rounded bg-slate-200 text-slate-800 font-mono-code font-semibold text-[11px]">' + esc(item.action) + '</span>' +
+              '<span class="text-slate-700 font-medium">' + esc(item.detail) + '</span>' +
             '</div>' +
-            '<span class="text-slate-400 font-mono-code text-[11px]">' + item.time + '</span>';
+            '<span class="text-slate-400 font-mono-code text-[11px]">' + esc(item.time) + '</span>';
           list.appendChild(div);
         });
       }
@@ -1243,8 +1251,8 @@ gh repo create Otabek1511/hisobgo-crm --public --source=. --remote=origin --push
 
           btn.innerHTML =
             '<div>' +
-              '<div class="font-bold text-xs text-white">' + s.name + '</div>' +
-              '<div class="text-[11px] text-slate-400 font-mono-code">login: ' + s.login + ' | parol: ' + s.password + '</div>' +
+              '<div class="font-bold text-xs text-white">' + esc(s.name) + '</div>' +
+              '<div class="text-[11px] text-slate-400 font-mono-code">login: ' + esc(s.login) + ' | parol: ' + esc(s.password) + '</div>' +
             '</div>' + badge;
 
           btn.addEventListener("click", function() {
@@ -1278,16 +1286,16 @@ gh repo create Otabek1511/hisobgo-crm --public --source=. --remote=origin --push
         syncStoreExpirationStatus(store);
 
         if (store.status === "BLOCKED") {
-          errorBox.innerHTML = "⛔ <strong>Kirish rad etildi (403 Locked):</strong> '" + store.name + "' hisobi Superadmin tomonidan vaqtincha bloklangan!";
+          errorBox.innerHTML = "⛔ <strong>Kirish rad etildi (403 Locked):</strong> '" + esc(store.name) + "' hisobi Superadmin tomonidan vaqtincha bloklangan!";
           errorBox.classList.remove("hidden");
-          addAuditLog(store.login, "LOGIN_BLOCKED", "'" + store.name + "' bloklangan holatda kirishga urindi.");
+          addAuditLog(store.login, "LOGIN_BLOCKED", "'" + esc(store.name) + "' bloklangan holatda kirishga urindi.");
           return;
         }
 
         if (store.status === "EXPIRED") {
-          errorBox.innerHTML = "⚠️ <strong>Abonent to'lovi muddati tugagan (402 Payment Required):</strong> '" + store.name + "' abonent muddati (" + store.subscriptionExpiresAt + ") o'tib ketgan. Superadmin panelidan muddatni uzaytiring.";
+          errorBox.innerHTML = "⚠️ <strong>Abonent to'lovi muddati tugagan (402 Payment Required):</strong> '" + esc(store.name) + "' abonent muddati (" + esc(store.subscriptionExpiresAt) + ") o'tib ketgan. Superadmin panelidan muddatni uzaytiring.";
           errorBox.classList.remove("hidden");
-          addAuditLog(store.login, "LOGIN_EXPIRED", "'" + store.name + "' muddati o'tgan obuna bilan kirishga urindi.");
+          addAuditLog(store.login, "LOGIN_EXPIRED", "'" + esc(store.name) + "' muddati o'tgan obuna bilan kirishga urindi.");
           return;
         }
 
@@ -1307,8 +1315,8 @@ gh repo create Otabek1511/hisobgo-crm --public --source=. --remote=origin --push
 
         // Otherwise log straight into the store's HisobGo CRM
         state.activeStoreId = store.id;
-        addAuditLog(store.login, "LOGIN_SUCCESS", "'" + store.name + "' CRM tizimiga muvaffaqiyatli kirdi.");
-        showToast("Xush kelibsiz! '" + store.name + "' CRM tizimi ochildi.", "info");
+        addAuditLog(store.login, "LOGIN_SUCCESS", "'" + esc(store.name) + "' CRM tizimiga muvaffaqiyatli kirdi.");
+        showToast("Xush kelibsiz! '" + esc(store.name) + "' CRM tizimi ochildi.", "info");
         switchMainView("crm");
       }
 
@@ -1439,8 +1447,8 @@ gh repo create Otabek1511/hisobgo-crm --public --source=. --remote=origin --push
             div.className = "p-2.5 rounded-xl bg-amber-50/80 border border-amber-200 flex items-center justify-between text-xs";
             div.innerHTML =
               '<div>' +
-                '<div class="font-bold text-slate-900">' + item.name + '</div>' +
-                '<div class="text-slate-500 font-mono-code">SKU: ' + item.sku + '</div>' +
+                '<div class="font-bold text-slate-900">' + esc(item.name) + '</div>' +
+                '<div class="text-slate-500 font-mono-code">SKU: ' + esc(item.sku) + '</div>' +
               '</div>' +
               '<span class="px-2.5 py-1 rounded-lg bg-amber-200/80 text-amber-950 font-bold">' + item.stock + ' dona qoldi</span>';
             lowStockContainer.appendChild(div);
@@ -1534,17 +1542,17 @@ gh repo create Otabek1511/hisobgo-crm --public --source=. --remote=origin --push
           card.innerHTML =
             '<div>' +
               '<div class="flex items-center justify-between text-[11px] text-slate-500 font-mono-code">' +
-                '<span>SKU: ' + prod.sku + '</span>' +
-                '<span class="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-sans">' + prod.category + '</span>' +
+                '<span>SKU: ' + esc(prod.sku) + '</span>' +
+                '<span class="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-sans">' + esc(prod.category) + '</span>' +
               '</div>' +
-              '<div class="font-bold text-sm text-slate-900 mt-1">' + prod.name + '</div>' +
+              '<div class="font-bold text-sm text-slate-900 mt-1">' + esc(prod.name) + '</div>' +
             '</div>' +
             '<div class="flex items-center justify-between pt-2 border-t border-slate-200/80">' +
               '<div>' +
                 '<div class="font-extrabold text-indigo-600 text-sm">' + formatUzs(prod.price) + '</div>' +
                 '<div class="text-[11px] text-slate-500">Ombor: <strong>' + prod.stock + ' dona</strong></div>' +
               '</div>' +
-              '<button type="button" data-pos-add="' + prod.sku + '" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">+ Savatga</button>' +
+              '<button type="button" data-pos-add="' + esc(prod.sku) + '" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">+ Savatga</button>' +
             '</div>';
           grid.appendChild(card);
         });
@@ -1570,13 +1578,13 @@ gh repo create Otabek1511/hisobgo-crm --public --source=. --remote=origin --push
             row.className = "p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 text-xs";
             row.innerHTML =
               '<div class="flex-1">' +
-                '<div class="font-bold text-slate-900">' + prod.name + '</div>' +
+                '<div class="font-bold text-slate-900">' + esc(prod.name) + '</div>' +
                 '<div class="text-slate-500">' + formatUzs(prod.price) + ' × ' + item.qty + ' = <strong class="text-slate-900">' + formatUzs(lineTotal) + '</strong></div>' +
               '</div>' +
               '<div class="flex items-center gap-1">' +
-                '<button type="button" data-cart-dec="' + prod.sku + '" class="w-6 h-6 rounded bg-slate-200 hover:bg-slate-300 font-bold">-</button>' +
+                '<button type="button" data-cart-dec="' + esc(prod.sku) + '" class="w-6 h-6 rounded bg-slate-200 hover:bg-slate-300 font-bold">-</button>' +
                 '<span class="w-6 text-center font-bold">' + item.qty + '</span>' +
-                '<button type="button" data-cart-inc="' + prod.sku + '" class="w-6 h-6 rounded bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold">+</button>' +
+                '<button type="button" data-cart-inc="' + esc(prod.sku) + '" class="w-6 h-6 rounded bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold">+</button>' +
               '</div>';
             cartList.appendChild(row);
           });
@@ -1603,15 +1611,15 @@ gh repo create Otabek1511/hisobgo-crm --public --source=. --remote=origin --push
           const tr = document.createElement("tr");
           tr.className = "hover:bg-slate-50";
           tr.innerHTML =
-            '<td class="py-3 px-4 font-mono-code text-xs text-slate-600">' + p.sku + '</td>' +
-            '<td class="py-3 px-4 font-bold text-slate-900">' + p.name + '</td>' +
-            '<td class="py-3 px-4 text-xs text-slate-600">' + p.category + '</td>' +
+            '<td class="py-3 px-4 font-mono-code text-xs text-slate-600">' + esc(p.sku) + '</td>' +
+            '<td class="py-3 px-4 font-bold text-slate-900">' + esc(p.name) + '</td>' +
+            '<td class="py-3 px-4 text-xs text-slate-600">' + esc(p.category) + '</td>' +
             '<td class="py-3 px-4 text-right text-slate-600">' + formatUzs(p.cost) + '</td>' +
             '<td class="py-3 px-4 text-right font-bold text-slate-900">' + formatUzs(p.price) + '</td>' +
             '<td class="py-3 px-4 text-right text-emerald-600 font-semibold">+' + margin + '%</td>' +
             '<td class="py-3 px-4 text-center">' + stockBadge + '</td>' +
             '<td class="py-3 px-4 text-right">' +
-              '<button type="button" data-restock-sku="' + p.sku + '" class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs">+10 kirim</button>' +
+              '<button type="button" data-restock-sku="' + esc(p.sku) + '" class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs">+10 kirim</button>' +
             '</td>';
           tbody.appendChild(tr);
         });
@@ -1626,14 +1634,14 @@ gh repo create Otabek1511/hisobgo-crm --public --source=. --remote=origin --push
             : '<span class="text-xs text-slate-400">Qarzi yo\'q</span>';
 
           const payDebtBtn = c.debt > 0
-            ? '<button type="button" data-pay-debt="' + c.id + '" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold">💵 Qarzni so\'ndirish</button>'
+            ? '<button type="button" data-pay-debt="' + esc(c.id) + '" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold">💵 Qarzni so\'ndirish</button>'
             : '<span class="text-xs text-emerald-600 font-medium">To\'langan</span>';
 
           const tr = document.createElement("tr");
           tr.className = "hover:bg-slate-50";
           tr.innerHTML =
-            '<td class="py-3 px-4 font-bold text-slate-900">' + c.name + '</td>' +
-            '<td class="py-3 px-4 text-slate-600 text-xs">' + c.phone + '</td>' +
+            '<td class="py-3 px-4 font-bold text-slate-900">' + esc(c.name) + '</td>' +
+            '<td class="py-3 px-4 text-slate-600 text-xs">' + esc(c.phone) + '</td>' +
             '<td class="py-3 px-4 text-right font-semibold">' + formatUzs(c.totalSpent) + '</td>' +
             '<td class="py-3 px-4 text-right text-indigo-600 font-semibold">' + formatUzs(c.cashback) + '</td>' +
             '<td class="py-3 px-4 text-right">' + debtBadge + '</td>' +
@@ -1653,11 +1661,11 @@ gh repo create Otabek1511/hisobgo-crm --public --source=. --remote=origin --push
           const tr = document.createElement("tr");
           tr.className = "hover:bg-slate-50";
           tr.innerHTML =
-            '<td class="py-3 px-4 font-mono-code font-bold text-xs text-indigo-600">' + r.id + '</td>' +
-            '<td class="py-3 px-4 text-xs text-slate-500">' + r.time + '</td>' +
-            '<td class="py-3 px-4 font-semibold text-slate-800">' + r.customer + '</td>' +
-            '<td class="py-3 px-4 text-xs text-slate-600">' + r.items + '</td>' +
-            '<td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-semibold">' + r.method + '</span></td>' +
+            '<td class="py-3 px-4 font-mono-code font-bold text-xs text-indigo-600">' + esc(r.id) + '</td>' +
+            '<td class="py-3 px-4 text-xs text-slate-500">' + esc(r.time) + '</td>' +
+            '<td class="py-3 px-4 font-semibold text-slate-800">' + esc(r.customer) + '</td>' +
+            '<td class="py-3 px-4 text-xs text-slate-600">' + esc(r.items) + '</td>' +
+            '<td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-semibold">' + esc(r.method) + '</span></td>' +
             '<td class="py-3 px-4 text-right font-bold text-slate-900">' + formatUzs(r.total) + '</td>';
           tbody.appendChild(tr);
         });

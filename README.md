@@ -17,12 +17,27 @@ Ushbu loyiha [HisobGo](https://HisobGo.io/uz) chakana savdo avtomatlashtirish ti
    - **Tovarlar va Ombor:** Katalog, SKU, kelish va sotuv narxlari, marja hisobi va omborga kirim qilish.
    - **Mijozlar va Nasiya (CRM):** Mijozlar ro'yxati, 3% keshbek balansi va nasiya qarzlarini so'ndirish.
 
-## GitHub (`Otabek1511`) ga Joylashtirish
+## Ishga tushirish
 
 ```bash
-git init
-git branch -M main
-git add .
-git commit -m "feat: initial commit of HisobGo Multi-Tenant Retail CRM and Superadmin System"
-gh repo create Otabek1511/hisobgo-crm --public --source=. --remote=origin --push
+cp .env.example .env        # qiymatlarni almashtiring (JWT_SECRET, SUPERADMIN_SECRET_KEY, POSTGRES_PASSWORD)
+docker compose up --build
 ```
+
+- Frontend: http://localhost:8080
+- API hujjatlari: http://localhost:8000/docs  (`/health` — holat tekshiruvi)
+- Jadvallar birinchi ishga tushishda avtomatik yaratiladi.
+- Lokal sinov: `cd backend && pip install -r requirements-dev.txt && pytest` (`ENV=dev` SQLite ishlatadi).
+
+## API qisqacha
+
+| Qism | Endpointlar |
+|---|---|
+| Superadmin (`X-Superadmin-Key`, ixtiyoriy `X-Superadmin-TOTP`) | `/api/superadmin/stores` (GET/POST), `.../{login}/block`, `.../subscription`, `.../reset-otp`, DELETE, `/api/superadmin/audit-logs` |
+| Autentifikatsiya | `/api/auth/login`, `/api/auth/change-initial-password` (5 ta xato urinishdan keyin 15 daqiqa blok) |
+| Do'kon (Bearer JWT, har so'rovda status/obuna tekshiriladi) | `/api/store/products`, `/customers`, `/sales`, `/dashboard` |
+
+## Muhim eslatmalar
+
+- `frontend/index.html` hozircha **mustaqil demo**: ma'lumotlar brauzer xotirasida, API'ga ulanmagan. Sahifadagi "2FA tasdiqlangan", IP, "SHA-256 chain", "PostgreSQL RLS" yozuvlari demo matni; backendda tenant izolyatsiyasi `store_id` filtri orqali amalga oshirilgan, RLS yoqilmagan.
+- Production'da `ENV=production` (standart) bo'lib, `JWT_SECRET` va `SUPERADMIN_SECRET_KEY` majburiy; `CORS_ORIGINS` ni frontend manziliga qo'ying.

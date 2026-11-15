@@ -1,28 +1,41 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:16-alpine
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_USER: hisobgo
-      POSTGRES_PASSWORD: hisobgo_secure_db_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD .env da o'rnatilmagan}
       POSTGRES_DB: hisobgo_crm
-    ports:
-      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hisobgo -d hisobgo_crm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
     build: ./backend
-    restart: always
+    restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg://hisobgo:hisobgo_secure_db_password@db:5432/hisobgo_crm
-      SUPERADMIN_SECRET_KEY: change_this_superadmin_2fa_key
+      DATABASE_URL: postgresql+psycopg://hisobgo:${POSTGRES_PASSWORD}@db:5432/hisobgo_crm
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET .env da o'rnatilmagan}
+      SUPERADMIN_SECRET_KEY: ${SUPERADMIN_SECRET_KEY:?SUPERADMIN_SECRET_KEY .env da o'rnatilmagan}
+      SUPERADMIN_TOTP_SECRET: ${SUPERADMIN_TOTP_SECRET:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+
+  frontend:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    ports:
+      - "127.0.0.1:8080:80"
 
 volumes:
   pgdata:
