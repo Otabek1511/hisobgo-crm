@@ -130,7 +130,7 @@ def store_public(store: StoreTenant) -> dict:
 # ---------------------------------------------------------------------------
 class CreateStoreRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
-    tin: str = Field(pattern=r"^\d{9,14}$")
+    tin: str = Field(default="", pattern=r"^(\d{9,14})?$")  # STIR ixtiyoriy
     owner_name: str = Field(min_length=2, max_length=120)
     phone: str = Field(min_length=7, max_length=32)
     login: str = Field(pattern=r"^[A-Za-z0-9_.-]{3,64}$")
