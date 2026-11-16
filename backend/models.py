@@ -87,6 +87,7 @@ class SaleReceipt(Base):
     total_uzs: Mapped[int] = mapped_column(BigInteger, nullable=False)
     profit_uzs: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # qaytarilgan chek
 
     store: Mapped["StoreTenant"] = relationship(back_populates="receipts")
 

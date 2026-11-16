@@ -55,6 +55,7 @@ async def lifespan(_: FastAPI):
     if engine.dialect.name == "postgresql":  # mavjud jadvalga yangi ustun (create_all buni qilmaydi)
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS customer_id INTEGER"))
+            conn.execute(text("ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ"))
     yield
 
 
@@ -166,6 +167,15 @@ class ProductIn(BaseModel):
     cost_uzs: int = Field(ge=0, le=10**12)
     price_uzs: int = Field(ge=0, le=10**12)
     stock_qty: int = Field(default=0, ge=0, le=10**7)
+
+
+class ProductUpdate(BaseModel):
+    sku: str | None = Field(default=None, max_length=64)
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    category: str | None = Field(default=None, max_length=80)
+    cost_uzs: int | None = Field(default=None, ge=0, le=10**12)
+    price_uzs: int | None = Field(default=None, ge=0, le=10**12)
+    stock_qty: int | None = Field(default=None, ge=0, le=10**7)
 
 
 class RestockRequest(BaseModel):
@@ -437,7 +447,7 @@ def receipt_out(r: SaleReceipt) -> dict:
     return {
         "receipt_code": r.receipt_code, "customer_id": r.customer_id, "customer_name": r.customer_name, "items": r.items_summary,
         "payment_method": r.payment_method, "total_uzs": r.total_uzs, "profit_uzs": r.profit_uzs,
-        "created_at": r.created_at,
+        "created_at": r.created_at, "refunded": r.refunded_at is not None, "refunded_at": r.refunded_at,
     }
 
 
@@ -476,6 +486,46 @@ def restock_product(
     p.stock_qty += payload.qty
     db.commit()
     return product_out(p)
+
+
+@app.patch("/api/store/products/{sku}")
+def update_product(
+    sku: str, payload: ProductUpdate, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)
+):
+    p = db.scalar(select(Product).where(Product.store_id == store.id, Product.sku == sku).with_for_update())
+    if not p:
+        raise HTTPException(status_code=404, detail="Tovar topilmadi")
+    data = payload.model_dump(exclude_unset=True)
+    if "sku" in data:
+        new_sku = (data["sku"] or "").strip()
+        if not new_sku:
+            raise HTTPException(status_code=400, detail="SKU bo'sh bo'lishi mumkin emas")
+        if new_sku != p.sku and db.scalar(select(Product.id).where(Product.store_id == store.id, Product.sku == new_sku)):
+            raise HTTPException(status_code=400, detail="Bu SKU/shtrixkod allaqachon mavjud")
+        p.sku = new_sku
+    if "name" in data:
+        p.name = data["name"].strip()
+        if not p.name:
+            raise HTTPException(status_code=400, detail="Tovar nomi bo'sh bo'lishi mumkin emas")
+    if "category" in data:
+        p.category = (data["category"] or "").strip() or "Umumiy"
+    for f in ("cost_uzs", "price_uzs", "stock_qty"):
+        if data.get(f) is not None:
+            setattr(p, f, data[f])
+    audit(db, store.login, "UPDATE_PRODUCT", f"{p.sku}: {', '.join(sorted(data))}")
+    db.commit()
+    return product_out(p)
+
+
+@app.delete("/api/store/products/{sku}")
+def delete_product(sku: str, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    p = db.scalar(select(Product).where(Product.store_id == store.id, Product.sku == sku).with_for_update())
+    if not p:
+        raise HTTPException(status_code=404, detail="Tovar topilmadi")
+    audit(db, store.login, "DELETE_PRODUCT", f"{p.sku} ({p.name}), qoldiq {p.stock_qty}")
+    db.delete(p)  # eski cheklardagi nom/summalar SaleItem'da saqlanib qoladi
+    db.commit()
+    return {"deleted": True}
 
 
 # ---------------------------------------------------------------------------
@@ -607,6 +657,42 @@ def list_sales(limit: int = 100, store: StoreTenant = Depends(current_store), db
     return [receipt_out(r) for r in rows]
 
 
+@app.post("/api/store/sales/{receipt_code}/refund")
+def refund_sale(receipt_code: str, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    """Chekni to'liq qaytarish: ombor, mijoz hisobi (xarid, nasiya yoki keshbek) tiklanadi."""
+    r = db.scalar(
+        select(SaleReceipt)
+        .where(SaleReceipt.store_id == store.id, SaleReceipt.receipt_code == receipt_code)
+        .with_for_update()
+    )
+    if not r:
+        raise HTTPException(status_code=404, detail="Chek topilmadi")
+    if r.refunded_at is not None:
+        raise HTTPException(status_code=409, detail="Bu chek allaqachon qaytarilgan")
+
+    items = db.scalars(select(SaleItem).where(SaleItem.receipt_id == r.id)).all()
+    restored = 0
+    for it in sorted(items, key=lambda i: i.sku):
+        p = db.scalar(select(Product).where(Product.store_id == store.id, Product.sku == it.sku).with_for_update())
+        if p:  # tovar o'chirilgan bo'lsa, qoldiq tiklanmaydi
+            p.stock_qty += it.qty
+            restored += 1
+
+    if r.customer_id is not None:
+        c = db.scalar(select(Customer).where(Customer.id == r.customer_id, Customer.store_id == store.id).with_for_update())
+        if c:
+            c.total_spent_uzs = max(0, c.total_spent_uzs - r.total_uzs)
+            if r.payment_method == "Nasiya":
+                c.debt_uzs = max(0, c.debt_uzs - r.total_uzs)
+            else:
+                c.cashback_uzs = max(0, c.cashback_uzs - r.total_uzs * CASHBACK_RATE_PCT // 100)
+
+    r.refunded_at = utcnow()
+    audit(db, store.login, "REFUND_SALE", f"{r.receipt_code}: {r.total_uzs} so'm, {r.payment_method}")
+    db.commit()
+    return {**receipt_out(r), "stock_restored": bool(items) and restored == len(items), "had_items": bool(items)}
+
+
 @app.get("/api/store/dashboard")
 def dashboard(store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
     products = db.scalars(select(Product).where(Product.store_id == store.id)).all()
@@ -616,7 +702,7 @@ def dashboard(store: StoreTenant = Depends(current_store), db: Session = Depends
     today = datetime.now(tg.TZ).date()
     first_day = today - timedelta(days=13)
     since = datetime.combine(first_day, datetime.min.time(), tzinfo=tg.TZ).astimezone(timezone.utc)
-    recent = db.scalars(select(SaleReceipt).where(SaleReceipt.store_id == store.id, SaleReceipt.created_at >= since)).all()
+    recent = db.scalars(select(SaleReceipt).where(SaleReceipt.store_id == store.id, SaleReceipt.created_at >= since, SaleReceipt.refunded_at.is_(None))).all()
     per_day: dict[date, list[int]] = {}
     for r in recent:
         d = _aware(r.created_at).astimezone(tg.TZ).date()
@@ -636,7 +722,7 @@ def dashboard(store: StoreTenant = Depends(current_store), db: Session = Depends
     by_method: dict[str, int] = {}
     for method, total in db.execute(
         select(SaleReceipt.payment_method, func.sum(SaleReceipt.total_uzs))
-        .where(SaleReceipt.store_id == store.id)
+        .where(SaleReceipt.store_id == store.id, SaleReceipt.refunded_at.is_(None))
         .group_by(SaleReceipt.payment_method)
     ).all():
         by_method[method] = int(total or 0)

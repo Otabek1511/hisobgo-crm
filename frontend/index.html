@@ -275,7 +275,7 @@
                 <th class="py-3 px-4 font-semibold text-right">Sotuv Narxi</th>
                 <th class="py-3 px-4 font-semibold text-right">Ustama</th>
                 <th class="py-3 px-4 font-semibold text-center">Qoldiq</th>
-                <th class="py-3 px-4 font-semibold text-right">Kirim</th>
+                <th class="py-3 px-4 font-semibold text-right">Amallar</th>
               </tr>
             </thead>
             <tbody id="inventoryTableBody" class="divide-y divide-slate-100 text-sm"></tbody>
@@ -376,6 +376,7 @@
                 <th class="py-3 px-4 font-semibold">Tovarlar</th>
                 <th class="py-3 px-4 font-semibold">To'lov Turi</th>
                 <th class="py-3 px-4 font-semibold text-right">Summa</th>
+                <th class="py-3 px-4 font-semibold text-right">Amal</th>
               </tr>
             </thead>
             <tbody id="receiptsTableBody" class="divide-y divide-slate-100 text-sm"></tbody>
@@ -407,7 +408,7 @@
   <div id="modalProduct" class="hidden fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
       <div class="flex items-center justify-between pb-3 border-b border-slate-200">
-        <h3 class="font-bold text-lg text-slate-900">Yangi Tovar Qo'shish</h3>
+        <h3 id="modalProductTitle" class="font-bold text-lg text-slate-900">Yangi Tovar Qo'shish</h3>
         <button type="button" data-close="modalProduct" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
       </div>
       <form id="formAddProduct" class="space-y-3">
@@ -435,7 +436,7 @@
             <input id="inpProdPrice" type="number" required min="0" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
           </div>
           <div>
-            <label for="inpProdStock" class="block text-xs font-semibold text-slate-700 mb-1">Soni</label>
+            <label for="inpProdStock" id="lblProdStock" class="block text-xs font-semibold text-slate-700 mb-1">Soni</label>
             <input id="inpProdStock" type="number" required min="0" value="0" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
           </div>
         </div>
@@ -815,7 +816,7 @@
       $("inventoryTableBody").innerHTML = list.length ? list.map(function (p) {
         var m = p.cost_uzs > 0 ? Math.round((p.price_uzs - p.cost_uzs) * 100 / p.cost_uzs) : 0;
         var low = p.stock_qty <= 10;
-        return '<tr class="hover:bg-slate-50"><td class="py-3 px-4 font-mono-code text-xs text-slate-600">' + esc(p.sku) + '</td><td class="py-3 px-4 font-bold text-slate-900">' + esc(p.name) + '</td><td class="py-3 px-4 text-xs text-slate-600">' + esc(p.category) + '</td><td class="py-3 px-4 text-right text-slate-600">' + uzs(p.cost_uzs) + '</td><td class="py-3 px-4 text-right font-bold text-slate-900">' + uzs(p.price_uzs) + '</td><td class="py-3 px-4 text-right text-emerald-600 font-semibold">+' + m + '%</td><td class="py-3 px-4 text-center"><span class="px-2.5 py-1 rounded-full font-bold text-xs ' + (low ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800") + '">' + esc(p.stock_qty) + ' dona</span></td><td class="py-3 px-4 text-right"><button type="button" data-restock="' + esc(p.sku) + '" class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs">+10 kirim</button></td></tr>';
+        return '<tr class="hover:bg-slate-50"><td class="py-3 px-4 font-mono-code text-xs text-slate-600">' + esc(p.sku) + '</td><td class="py-3 px-4 font-bold text-slate-900">' + esc(p.name) + '</td><td class="py-3 px-4 text-xs text-slate-600">' + esc(p.category) + '</td><td class="py-3 px-4 text-right text-slate-600">' + uzs(p.cost_uzs) + '</td><td class="py-3 px-4 text-right font-bold text-slate-900">' + uzs(p.price_uzs) + '</td><td class="py-3 px-4 text-right text-emerald-600 font-semibold">+' + m + '%</td><td class="py-3 px-4 text-center"><span class="px-2.5 py-1 rounded-full font-bold text-xs ' + (low ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800") + '">' + esc(p.stock_qty) + ' dona</span></td><td class="py-3 px-4 text-right"><div class="inline-flex gap-1.5"><button type="button" data-restock="' + esc(p.sku) + '" class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs">+10</button><button type="button" data-edit="' + esc(p.sku) + '" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs">Tahrir</button><button type="button" data-del="' + esc(p.sku) + '" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs">O\'chirish</button></div></td></tr>';
       }).join("") : '<tr><td colspan="8" class="py-8 text-center text-slate-400 text-xs">Tovar topilmadi.</td></tr>';
     }
 
@@ -879,7 +880,7 @@
       $("btnPayFullDebt").classList.toggle("opacity-50", !(cur.debt_uzs > 0));
       $("custProfileHistory").innerHTML = !h ? '<div class="text-xs text-slate-400 py-2">Yuklanmoqda…</div>'
         : h.receipts.length ? h.receipts.map(function (r) {
-          return '<div class="p-2 rounded-xl bg-slate-50 border border-slate-200/80 flex justify-between text-xs"><div><div class="font-bold">' + esc(r.receipt_code) + '</div><div class="text-[11px] text-slate-500">' + esc(fmtTime(r.created_at)) + " • " + esc(r.payment_method) + '</div></div><div class="font-bold">' + uzs(r.total_uzs) + "</div></div>";
+          return '<div class="p-2 rounded-xl bg-slate-50 border border-slate-200/80 flex justify-between text-xs"><div><div class="font-bold">' + esc(r.receipt_code) + '</div><div class="text-[11px] text-slate-500">' + esc(fmtTime(r.created_at)) + " • " + esc(r.payment_method) + '</div></div><div class="font-bold">' + (r.refunded ? '<span class="line-through opacity-60">' + uzs(r.total_uzs) + '</span>' : uzs(r.total_uzs)) + "</div></div>";
         }).join("") : '<div class="text-xs text-slate-400 py-2">Hali xarid yo\'q.</div>';
     }
 
@@ -893,8 +894,9 @@
       var f = $("recMethodFilter").value;
       var list = S.receipts.filter(function (r) { return f === "ALL" || r.payment_method === f; });
       $("receiptsTableBody").innerHTML = list.length ? list.map(function (r) {
-        return '<tr class="hover:bg-slate-50"><td class="py-3 px-4 font-mono-code font-bold text-xs text-indigo-600">' + esc(r.receipt_code) + '</td><td class="py-3 px-4 text-xs text-slate-500">' + esc(fmtTime(r.created_at)) + '</td><td class="py-3 px-4 font-semibold text-slate-900">' + esc(r.customer_name) + '</td><td class="py-3 px-4 text-xs text-slate-600">' + esc(r.items) + '</td><td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-semibold">' + esc(r.payment_method) + '</span></td><td class="py-3 px-4 text-right font-bold text-slate-900">' + uzs(r.total_uzs) + "</td></tr>";
-      }).join("") : '<tr><td colspan="6" class="py-8 text-center text-slate-400 text-xs">Hozircha cheklar yo\'q.</td></tr>';
+        var rf = r.refunded;
+        return '<tr class="hover:bg-slate-50' + (rf ? " opacity-60" : "") + '"><td class="py-3 px-4 font-mono-code font-bold text-xs text-indigo-600">' + esc(r.receipt_code) + '</td><td class="py-3 px-4 text-xs text-slate-500">' + esc(fmtTime(r.created_at)) + '</td><td class="py-3 px-4 font-semibold text-slate-900">' + esc(r.customer_name) + '</td><td class="py-3 px-4 text-xs text-slate-600">' + esc(r.items) + '</td><td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-semibold">' + esc(r.payment_method) + '</span></td><td class="py-3 px-4 text-right font-bold text-slate-900">' + (rf ? '<span class="line-through">' : "<span>") + uzs(r.total_uzs) + '</span></td><td class="py-3 px-4 text-right">' + (rf ? '<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-700 text-xs font-semibold">Qaytarilgan</span>' : '<button type="button" data-refund="' + esc(r.receipt_code) + '" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs">Qaytarish</button>') + "</td></tr>";
+      }).join("") : '<tr><td colspan="7" class="py-8 text-center text-slate-400 text-xs">Hozircha cheklar yo\'q.</td></tr>';
     }
 
     // ----- Botlar -----
@@ -934,6 +936,18 @@
     }
 
     // ----- Hodisalar -----
+    function openProductModal(sku) {
+      var p = sku ? S.products.filter(function (x) { return x.sku === sku; })[0] : null;
+      S.editSku = p ? p.sku : null;
+      $("formAddProduct").reset();
+      $("modalProductTitle").textContent = p ? "Tovarni tahrirlash" : "Yangi Tovar Qo'shish";
+      $("lblProdStock").textContent = p ? "Qoldiq (tuzatish)" : "Soni";
+      if (p) {
+        $("inpProdName").value = p.name; $("inpProdSku").value = p.sku; $("inpProdCat").value = p.category;
+        $("inpProdCost").value = p.cost_uzs; $("inpProdPrice").value = p.price_uzs; $("inpProdStock").value = p.stock_qty;
+      }
+      modal("modalProduct", true);
+    }
     function modal(id, open) { $(id).classList.toggle("hidden", !open); }
 
     function init() {
@@ -982,19 +996,48 @@
 
       // Tovarlar
       $("invSearchInput").addEventListener("input", renderInventory);
-      $("btnOpenAddProduct").addEventListener("click", function () { modal("modalProduct", true); });
+      $("btnOpenAddProduct").addEventListener("click", function () { openProductModal(null); });
       $("formAddProduct").addEventListener("submit", function (e) {
         e.preventDefault();
-        storeApi("POST", "/api/store/products", {
+        var body = {
           sku: $("inpProdSku").value.trim(), name: $("inpProdName").value.trim(), category: $("inpProdCat").value.trim(),
           cost_uzs: parseInt($("inpProdCost").value, 10) || 0, price_uzs: parseInt($("inpProdPrice").value, 10) || 0,
           stock_qty: parseInt($("inpProdStock").value, 10) || 0
-        }).then(function () { modal("modalProduct", false); $("formAddProduct").reset(); toast("Tovar qo'shildi.", "info"); return refreshAll(); }).catch(fail);
+        };
+        var editing = S.editSku;
+        var req = editing ? storeApi("PATCH", "/api/store/products/" + encodeURIComponent(editing), body) : storeApi("POST", "/api/store/products", body);
+        req.then(function () {
+          modal("modalProduct", false); $("formAddProduct").reset(); S.editSku = null;
+          toast(editing ? "Tovar yangilandi." : "Tovar qo'shildi.", "info"); return refreshAll();
+        }).catch(fail);
       });
       $("inventoryTableBody").addEventListener("click", function (e) {
+        var ed = e.target.closest("[data-edit]");
+        if (ed) { openProductModal(ed.getAttribute("data-edit")); return; }
+        var dl = e.target.closest("[data-del]");
+        if (dl) {
+          var dsku = dl.getAttribute("data-del");
+          var dp = S.products.filter(function (x) { return x.sku === dsku; })[0];
+          if (!window.confirm("'" + (dp ? dp.name : dsku) + "' tovarini o'chirasizmi? Eski cheklar saqlanib qoladi.")) return;
+          storeApi("DELETE", "/api/store/products/" + encodeURIComponent(dsku))
+            .then(function () { S.cart = S.cart.filter(function (i) { return i.sku !== dsku; }); toast("Tovar o'chirildi.", "info"); return refreshAll(); }).catch(fail);
+          return;
+        }
         var b = e.target.closest("[data-restock]"); if (!b) return;
         storeApi("POST", "/api/store/products/" + encodeURIComponent(b.getAttribute("data-restock")) + "/restock", { qty: 10 })
           .then(function () { toast("+10 dona kirim qilindi.", "info"); return refreshAll(); }).catch(fail);
+      });
+
+      $("receiptsTableBody").addEventListener("click", function (e) {
+        var b = e.target.closest("[data-refund]"); if (!b) return;
+        var code = b.getAttribute("data-refund");
+        if (!window.confirm(code + " chekini to'liq qaytarasizmi? Tovarlar omborga qaytadi, tushum va mijoz hisobi tuzatiladi.")) return;
+        b.disabled = true;
+        storeApi("POST", "/api/store/sales/" + encodeURIComponent(code) + "/refund")
+          .then(function (r) {
+            toast(code + " qaytarildi." + (r.had_items && r.stock_restored ? "" : " Diqqat: omborga qoldiq to'liq tiklanmadi (eski chek yoki tovar o'chirilgan)."), r.stock_restored ? "info" : "warning");
+            return refreshAll();
+          }).catch(function (err) { b.disabled = false; fail(err); });
       });
 
       // Mijozlar

@@ -211,7 +211,7 @@ def today_local() -> date:
 def build_daily_report(db: Session, store: StoreTenant, day: date) -> str:
     start = datetime.combine(day, time.min, tzinfo=TZ).astimezone(timezone.utc)
     end = start + timedelta(days=1)
-    in_day = (SaleReceipt.store_id == store.id, SaleReceipt.created_at >= start, SaleReceipt.created_at < end)
+    in_day = (SaleReceipt.store_id == store.id, SaleReceipt.created_at >= start, SaleReceipt.created_at < end, SaleReceipt.refunded_at.is_(None))
 
     receipts = db.scalars(select(SaleReceipt).where(*in_day)).all()
     head = f"📊 <b>Kunlik hisobot</b> — {_e(store.name)}\n📅 {day.strftime('%d.%m.%Y')}\n\n"
