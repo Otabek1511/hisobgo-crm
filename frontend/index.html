@@ -17,6 +17,9 @@
     .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
     .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
   </style>
+<style>
+@media print{body *{visibility:hidden!important}#modalReceipt,#modalReceipt *{visibility:visible!important}#modalReceipt{position:absolute!important;inset:0!important;background:#fff!important;display:block!important;padding:0!important}#modalReceipt .rcpt{width:80mm;max-width:80mm;margin:0 auto;box-shadow:none!important;border-radius:0!important;padding:4mm!important}#modalReceipt .rcpt-actions{display:none!important}@page{size:80mm auto;margin:3mm}}
+</style>
 </head>
 <body class="min-h-screen flex flex-col bg-slate-50 text-slate-900">
 
@@ -75,6 +78,23 @@
     </div>
   </header>
 
+  <div id="modalReceipt" class="hidden fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4 overflow-auto">
+    <section class="rcpt bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 text-slate-900">
+      <header class="text-center mb-3">
+        <div id="rcStore" class="font-extrabold text-lg"></div>
+        <div class="text-[11px] tracking-widest text-emerald-600 font-bold mt-1">SOTUV CHEKI</div>
+        <p class="text-xs text-slate-500 mt-1">Ichki hisob uchun. Rasmiy fiskal chek emas.</p>
+      </header>
+      <div class="border-t border-dashed border-slate-300 py-3 text-sm space-y-1" id="rcMeta"></div>
+      <div class="border-t border-dashed border-slate-300 py-3 text-sm space-y-1.5" id="rcLines"></div>
+      <div class="border-t border-dashed border-slate-300 py-3 text-sm space-y-1" id="rcTotals"></div>
+      <p class="text-center text-xs my-3">Xaridingiz uchun rahmat!</p>
+      <footer class="rcpt-actions flex gap-2">
+        <button type="button" id="btnReceiptPrint" class="flex-1 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-bold">Chekni chiqarish / Chop etish</button>
+        <button type="button" id="btnReceiptClose" class="flex-1 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold">Bekor qilish / Yopish</button>
+      </footer>
+    </section>
+  </div>
   <div id="toastBox" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
 
   <!-- ===== KIRISH ===== -->
@@ -754,16 +774,34 @@
       $("posTotalVal").textContent = uzs(sub - disc);
     }
 
+    function showReceipt(r, lines, pct, sub, cid) {
+      var row = function (a, b, cls) { return '<div class="flex justify-between gap-3' + (cls ? " " + cls : "") + '"><span>' + a + '</span><b>' + b + '</b></div>'; };
+      $("rcStore").textContent = (S.me && S.me.name) || "Do'kon";
+      $("rcMeta").innerHTML = row("Chek raqami", esc(r.receipt_code)) + row("Sana va vaqt", esc(new Date().toLocaleString("uz-UZ"))) +
+        row("Xaridor", esc(r.customer_name || "Umumiy xaridor"));
+      $("rcLines").innerHTML = lines.map(function (l) { return row(esc(l.name) + " × " + esc(l.qty), uzs(l.price * l.qty)); }).join("");
+      var disc = sub - r.total_uzs;
+      $("rcTotals").innerHTML = (disc > 0 ? row("Oraliq jami", uzs(sub)) + row("Chegirma (" + pct + "%)", "-" + uzs(disc)) : "") +
+        row("Jami", uzs(r.total_uzs), "text-base") + row("To'lov turi", esc(r.payment_method));
+      modal("modalReceipt", true);
+    }
+
     function completeSale() {
       if (!S.cart.length) { toast("Savat bo'sh!", "error"); return; }
       var cid = $("posCustomerSelect").value;
       if (S.pay === "Nasiya" && !cid) { toast("Nasiya uchun mijozni tanlang.", "warning"); return; }
       var pct = Math.min(50, Math.max(0, parseInt($("posDiscountInput").value, 10) || 0));
+      var cartSnap = S.cart.map(function (i) {
+        var p = S.products.filter(function (x) { return x.sku === i.sku; })[0] || {};
+        return { name: p.name || i.sku, qty: i.qty, price: p.price_uzs || 0 };
+      });
+      var subSnap = cartSnap.reduce(function (a, l) { return a + l.price * l.qty; }, 0);
       var btn = $("btnCheckoutPos"); btn.disabled = true;
       storeApi("POST", "/api/store/sales", {
         items: S.cart.map(function (i) { return { sku: i.sku, qty: i.qty }; }),
         payment_method: S.pay, discount_pct: pct, customer_id: cid ? Number(cid) : null
       }).then(function (r) {
+        showReceipt(r, cartSnap, pct, subSnap, cid);
         S.cart = []; $("posDiscountInput").value = "0";
         toast("Chek " + r.receipt_code + " — " + uzs(r.total_uzs), "info");
         return refreshAll();
@@ -919,6 +957,8 @@
       $("posDiscountInput").addEventListener("input", renderCart);
       $("btnClearCart").addEventListener("click", function () { S.cart = []; renderCart(); });
       $("btnCheckoutPos").addEventListener("click", completeSale);
+      $("btnReceiptPrint").addEventListener("click", function () { window.print(); });
+      $("btnReceiptClose").addEventListener("click", function () { modal("modalReceipt", false); });
       $("posPayGroup").addEventListener("click", function (e) {
         var b = e.target.closest("[data-pay]"); if (!b) return;
         S.pay = b.getAttribute("data-pay"); renderPos();
