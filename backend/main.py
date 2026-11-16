@@ -11,7 +11,7 @@ from fastapi import BackgroundTasks, Body, Depends, FastAPI, Header, HTTPExcepti
 from fastapi.middleware.cors import CORSMiddleware
 from pwdlib import PasswordHash
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from db import engine, get_db
@@ -52,6 +52,9 @@ _DUMMY_HASH = pwd_hasher.hash("dummy-password-for-timing")  # mavjud bo'lmagan l
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
+    if engine.dialect.name == "postgresql":  # mavjud jadvalga yangi ustun (create_all buni qilmaydi)
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS customer_id INTEGER"))
     yield
 
 
@@ -432,7 +435,7 @@ def customer_out(c: Customer) -> dict:
 
 def receipt_out(r: SaleReceipt) -> dict:
     return {
-        "receipt_code": r.receipt_code, "customer_name": r.customer_name, "items": r.items_summary,
+        "receipt_code": r.receipt_code, "customer_id": r.customer_id, "customer_name": r.customer_name, "items": r.items_summary,
         "payment_method": r.payment_method, "total_uzs": r.total_uzs, "profit_uzs": r.profit_uzs,
         "created_at": r.created_at,
     }
@@ -571,6 +574,7 @@ def create_sale(
         store_id=store.id,
         receipt_code="CHK-" + secrets.token_hex(3).upper(),
         customer_name=customer.full_name if customer else "Umumiy xaridor",
+        customer_id=customer.id if customer else None,
         items_summary=", ".join(parts)[:2000],
         payment_method=payload.payment_method,
         total_uzs=total,
@@ -607,19 +611,84 @@ def list_sales(limit: int = 100, store: StoreTenant = Depends(current_store), db
 def dashboard(store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
     products = db.scalars(select(Product).where(Product.store_id == store.id)).all()
     customers = db.scalars(select(Customer).where(Customer.store_id == store.id)).all()
-    receipts = db.scalars(select(SaleReceipt).where(SaleReceipt.store_id == store.id)).all()
-    revenue = sum(r.total_uzs for r in receipts)
-    profit = sum(r.profit_uzs for r in receipts)
+
+    # So'nggi 14 kun (Toshkent kunlari): 7 kunlik grafik + oldingi hafta bilan solishtirish
+    today = datetime.now(tg.TZ).date()
+    first_day = today - timedelta(days=13)
+    since = datetime.combine(first_day, datetime.min.time(), tzinfo=tg.TZ).astimezone(timezone.utc)
+    recent = db.scalars(select(SaleReceipt).where(SaleReceipt.store_id == store.id, SaleReceipt.created_at >= since)).all()
+    per_day: dict[date, list[int]] = {}
+    for r in recent:
+        d = _aware(r.created_at).astimezone(tg.TZ).date()
+        cell = per_day.setdefault(d, [0, 0])
+        cell[0] += r.total_uzs
+        cell[1] += r.profit_uzs
+    weekly = []
+    for k in range(6, -1, -1):
+        d = today - timedelta(days=k)
+        rev, prof = per_day.get(d, [0, 0])
+        weekly.append({"date": d.isoformat(), "revenue_uzs": rev, "profit_uzs": prof})
+    week_revenue = sum(x["revenue_uzs"] for x in weekly)
+    week_profit = sum(x["profit_uzs"] for x in weekly)
+    prev_week_revenue = sum(per_day.get(today - timedelta(days=k), [0, 0])[0] for k in range(7, 14))
+
+    # Jami to'lov turlari bo'yicha (butun tarix)
+    by_method: dict[str, int] = {}
+    for method, total in db.execute(
+        select(SaleReceipt.payment_method, func.sum(SaleReceipt.total_uzs))
+        .where(SaleReceipt.store_id == store.id)
+        .group_by(SaleReceipt.payment_method)
+    ).all():
+        by_method[method] = int(total or 0)
+
     return {
-        "revenue_uzs": revenue,
-        "profit_uzs": profit,
-        "margin_pct": round(profit * 100 / revenue, 1) if revenue else 0,
+        "week_revenue_uzs": week_revenue,
+        "week_profit_uzs": week_profit,
+        "prev_week_revenue_uzs": prev_week_revenue,
+        "margin_pct": round(week_profit * 100 / week_revenue, 1) if week_revenue else 0,
+        "weekly": weekly,
+        "by_method": by_method,
         "inventory_value_uzs": sum(p.price_uzs * p.stock_qty for p in products),
         "sku_count": len(products),
         "total_debt_uzs": sum(c.debt_uzs for c in customers),
+        "debtor_count": sum(1 for c in customers if c.debt_uzs > 0),
         "customer_count": len(customers),
         "low_stock": [product_out(p) for p in products if p.stock_qty <= 10],
     }
+
+
+class BonusRequest(BaseModel):
+    amount_uzs: int = Field(gt=0, le=10**9)
+
+
+@app.get("/api/store/customers/{customer_id}/history")
+def customer_history(customer_id: int, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    c = db.scalar(select(Customer).where(Customer.id == customer_id, Customer.store_id == store.id))
+    if not c:
+        raise HTTPException(status_code=404, detail="Mijoz topilmadi")
+    rows = db.scalars(
+        select(SaleReceipt)
+        .where(
+            SaleReceipt.store_id == store.id,
+            (SaleReceipt.customer_id == c.id) | ((SaleReceipt.customer_id.is_(None)) & (SaleReceipt.customer_name == c.full_name)),
+        )
+        .order_by(SaleReceipt.id.desc())
+        .limit(10)
+    ).all()
+    return {"last_visit": rows[0].created_at if rows else None, "receipts": [receipt_out(r) for r in rows]}
+
+
+@app.post("/api/store/customers/{customer_id}/bonus")
+def give_customer_bonus(
+    customer_id: int, payload: BonusRequest, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)
+):
+    c = db.scalar(select(Customer).where(Customer.id == customer_id, Customer.store_id == store.id).with_for_update())
+    if not c:
+        raise HTTPException(status_code=404, detail="Mijoz topilmadi")
+    c.cashback_uzs += payload.amount_uzs
+    audit(db, store.login, "GIVE_BONUS", f"{c.full_name}: +{payload.amount_uzs} so'm keshbek")
+    db.commit()
+    return customer_out(c)
 
 
 # ---------------------------------------------------------------------------

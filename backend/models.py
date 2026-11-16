@@ -81,6 +81,7 @@ class SaleReceipt(Base):
     store_id: Mapped[str] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True, nullable=False)
     receipt_code: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
     customer_name: Mapped[str] = mapped_column(String(120), default="Umumiy xaridor")
+    customer_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     items_summary: Mapped[str] = mapped_column(Text, default="", nullable=False)
     payment_method: Mapped[str] = mapped_column(String(32), nullable=False)  # Naqd | Uzcard/Humo | Click/Payme | Nasiya
     total_uzs: Mapped[int] = mapped_column(BigInteger, nullable=False)
