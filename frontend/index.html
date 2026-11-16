@@ -44,6 +44,7 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z"/></svg>
           Tezkor Kassa
         </button>
+        <button id="btnChangePw" type="button" class="hidden px-3 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-800 transition">Parol</button>
         <button id="btnLogout" type="button" class="hidden px-3 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:bg-slate-800 transition">Chiqish</button>
       </div>
     </div>
@@ -77,6 +78,45 @@
       </div>
     </div>
   </header>
+
+  <div id="modalPassword" class="hidden fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <h3 class="font-bold text-lg text-slate-900">Parolni almashtirish</h3>
+        <button type="button" data-close="modalPassword" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+      <form id="formPassword" class="space-y-3">
+        <div><label for="inpPwCur" class="block text-xs font-semibold text-slate-700 mb-1">Joriy parol</label>
+          <input id="inpPwCur" type="password" required autocomplete="current-password" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></div>
+        <div><label for="inpPwNew" class="block text-xs font-semibold text-slate-700 mb-1">Yangi parol</label>
+          <input id="inpPwNew" type="password" required minlength="8" autocomplete="new-password" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          <p class="text-[11px] text-slate-500 mt-1">Kamida 8 belgi: katta va kichik harf, raqam, maxsus belgi.</p></div>
+        <div><label for="inpPwNew2" class="block text-xs font-semibold text-slate-700 mb-1">Yangi parolni takrorlang</label>
+          <input id="inpPwNew2" type="password" required autocomplete="new-password" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></div>
+        <p class="text-[11px] text-slate-500">Parol almashgach boshqa qurilmalardagi sessiyalar yopiladi.</p>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" data-close="modalPassword" class="px-4 py-2 rounded-xl border border-slate-300 text-xs font-semibold">Bekor qilish</button>
+          <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">Saqlash</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modalRefund" class="hidden fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4 overflow-auto">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <h3 id="refundTitle" class="font-bold text-lg text-slate-900">Chekni qaytarish</h3>
+        <button type="button" data-close="modalRefund" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+      <div id="refundBody" class="space-y-2 text-sm"></div>
+      <p class="text-[11px] text-slate-500">Tovarlar omborga qaytadi, mijoz hisobi tuzatiladi. Qaytarilgan summa chegirmaga mutanosib hisoblanadi.</p>
+      <div class="flex flex-wrap justify-end gap-2 pt-2">
+        <button type="button" data-close="modalRefund" class="px-4 py-2 rounded-xl border border-slate-300 text-xs font-semibold">Bekor qilish</button>
+        <button type="button" id="btnRefundSelected" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-white text-xs font-bold">Tanlanganini qaytarish</button>
+        <button type="button" id="btnRefundAll" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold">Hammasini qaytarish</button>
+      </div>
+    </div>
+  </div>
 
   <div id="modalReceipt" class="hidden fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4 overflow-auto">
     <section class="rcpt bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 text-slate-900">
@@ -260,6 +300,7 @@
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <input id="invSearchInput" type="text" placeholder="Tovar yoki SKU qidirish..." class="px-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <button id="btnExportProducts" type="button" class="px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold">Excel (CSV)</button>
           <button id="btnOpenAddProduct" type="button" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-sm transition">+ Yangi tovar</button>
         </div>
       </div>
@@ -294,6 +335,7 @@
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <input id="custSearchInput" type="text" placeholder="Ism yoki +998 raqam..." class="px-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <button id="btnExportCustomers" type="button" class="px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold">Excel (CSV)</button>
           <button id="btnOpenAddCustomer" type="button" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-sm transition">+ Yangi mijoz</button>
         </div>
       </div>
@@ -343,6 +385,10 @@
               <button id="btnPayFullDebt" type="button" class="mt-1.5 w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold">Hammasini so'ndirish</button>
             </div>
           </div>
+          <div class="flex gap-2">
+            <button id="btnEditCust" type="button" class="flex-1 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold">Tahrirlash</button>
+            <button id="btnDelCust" type="button" class="flex-1 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold">O'chirish</button>
+          </div>
           <div class="space-y-2 pt-2 border-t border-slate-200">
             <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500">Oxirgi Cheklar</h4>
             <div id="custProfileHistory" class="space-y-2 max-h-48 overflow-y-auto custom-scroll pr-1"></div>
@@ -362,6 +408,11 @@
       <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
         <div class="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between gap-3">
           <h2 class="font-bold text-base text-slate-900">Kassa Cheklari Tarixi</h2>
+          <div class="flex flex-wrap items-center justify-end gap-2">
+          <input id="recSearch" type="text" placeholder="Chek № yoki mijoz..." class="px-3 py-1.5 rounded-xl border border-slate-300 text-xs bg-white w-40">
+          <input id="recFrom" type="date" title="Eksport: boshlanish sana" class="px-2 py-1.5 rounded-xl border border-slate-300 text-xs bg-white">
+          <input id="recTo" type="date" title="Eksport: tugash sana" class="px-2 py-1.5 rounded-xl border border-slate-300 text-xs bg-white">
+          <button id="btnExportSales" type="button" class="px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold">Excel (CSV)</button>
           <select id="recMethodFilter" class="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white">
             <option value="ALL">Barcha to'lov turlari</option>
             <option value="Naqd">Naqd</option>
@@ -369,6 +420,7 @@
             <option value="Click/Payme">Click/Payme</option>
             <option value="Nasiya">Nasiya</option>
           </select>
+          </div>
         </div>
         <div class="overflow-x-auto custom-scroll">
           <table class="w-full text-left border-collapse">
@@ -385,6 +437,7 @@
             </thead>
             <tbody id="receiptsTableBody" class="divide-y divide-slate-100 text-sm"></tbody>
           </table>
+          <div class="p-3 text-center"><button id="btnMoreReceipts" type="button" class="hidden px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold">Yana yuklash</button></div>
         </div>
       </div>
     </section>
@@ -455,7 +508,7 @@
   <div id="modalCustomer" class="hidden fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
       <div class="flex items-center justify-between pb-3 border-b border-slate-200">
-        <h3 class="font-bold text-lg text-slate-900">Yangi Mijoz Qo'shish</h3>
+        <h3 id="modalCustomerTitle" class="font-bold text-lg text-slate-900">Yangi Mijoz Qo'shish</h3>
         <button type="button" data-close="modalCustomer" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
       </div>
       <form id="formAddCustomer" class="space-y-3">
@@ -544,8 +597,8 @@
         })
         .finally(function () { clearTimeout(wake); });
     }
-    function storeApi(method, path, body) {
-      return api(method, path, body, { Authorization: "Bearer " + S.token }).catch(function (e) {
+    function storeApi(method, path, body, extra) {
+      return api(method, path, body, Object.assign({ Authorization: "Bearer " + S.token }, extra || {})).catch(function (e) {
         if (e.status === 401) { logout(); toast("Sessiya tugadi. Qayta kiring.", "warning"); }
         else if (e.status === 402 || e.status === 403) { logout(); showLoginError(e.message); }
         throw e;
@@ -562,10 +615,22 @@
       $("navTabs").classList.toggle("hidden", !crm);
       $("storeLine").classList.toggle("hidden", !crm);
       $("btnLogout").classList.toggle("hidden", !crm);
+      $("btnChangePw").classList.toggle("hidden", !crm);
       $("btnQuickPosHeader").classList.toggle("hidden", !crm);
       $("btnQuickPosHeader").classList.toggle("flex", crm);
     }
 
+    function download(path, fallbackName) {
+      return fetch(API + path, { headers: { Authorization: "Bearer " + S.token } }).then(function (r) {
+        if (!r.ok) { return r.text().then(function (t) { var d = null; try { d = JSON.parse(t); } catch (e) {} var er = new Error(errText(d)); er.status = r.status; throw er; }); }
+        var cd = r.headers.get("Content-Disposition") || "", m = /filename="?([^";]+)"?/.exec(cd);
+        return r.blob().then(function (b) {
+          var a = document.createElement("a"), u = URL.createObjectURL(b);
+          a.href = u; a.download = m ? m[1] : fallbackName; document.body.appendChild(a); a.click();
+          setTimeout(function () { URL.revokeObjectURL(u); a.remove(); }, 1000);
+        });
+      }).catch(function (e) { if (e.status === 401) { logout(); toast("Sessiya tugadi. Qayta kiring.", "warning"); } else fail(e); });
+    }
     function logout() {
       S.token = null; S.me = null; S.cart = []; S.hist = {}; S.selectedCustId = null;
       try { sessionStorage.removeItem("hg_token"); } catch (e) {}
@@ -650,14 +715,15 @@
       }).then(function () { switchTab(S.tab); }).catch(function () {});
     }
 
+    var PAGE = 100;
     function refreshAll() {
       return Promise.all([
         storeApi("GET", "/api/store/products"),
         storeApi("GET", "/api/store/customers"),
-        storeApi("GET", "/api/store/sales?limit=500"),
+        storeApi("GET", "/api/store/sales?limit=" + PAGE + "&q=" + encodeURIComponent(S.recQ || "")),
         storeApi("GET", "/api/store/dashboard")
       ]).then(function (r) {
-        S.products = r[0]; S.customers = r[1]; S.receipts = r[2]; S.dash = r[3];
+        S.products = r[0]; S.customers = r[1]; S.receipts = r[2]; S.dash = r[3]; S.recMore = r[2].length >= PAGE;
         S.hist = {};
         if (!S.customers.some(function (c) { return c.id === S.selectedCustId; })) {
           S.selectedCustId = S.customers.length ? S.customers[0].id : null;
@@ -802,15 +868,24 @@
       });
       var subSnap = cartSnap.reduce(function (a, l) { return a + l.price * l.qty; }, 0);
       var btn = $("btnCheckoutPos"); btn.disabled = true;
+      var sig = JSON.stringify([S.cart, S.pay, pct, cid]);
+      if (!S.idemKey || S.idemSig !== sig) {  // savat o'zgargan bo'lsa yangi kalit
+        S.idemKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
+        S.idemSig = sig;
+      }
       storeApi("POST", "/api/store/sales", {
         items: S.cart.map(function (i) { return { sku: i.sku, qty: i.qty }; }),
         payment_method: S.pay, discount_pct: pct, customer_id: cid ? Number(cid) : null
-      }).then(function (r) {
+      }, { "Idempotency-Key": S.idemKey }).then(function (r) {
+        S.idemKey = null;
         showReceipt(r, cartSnap, pct, subSnap, cid);
         S.cart = []; $("posDiscountInput").value = "0";
         toast("Chek " + r.receipt_code + " — " + uzs(r.total_uzs), "info");
         return refreshAll();
-      }).catch(fail).finally(function () { btn.disabled = false; });
+      }).catch(function (e) {
+        if (e.status && e.status < 500) S.idemKey = null;  // server rad etdi: yangi urinish yangi kalit bilan
+        fail(e);  // tarmoq/5xx xatosida kalit saqlanadi: qayta bosilsa sotuv ikki marta yozilmaydi
+      }).finally(function () { btn.disabled = false; });
     }
 
     // ----- Tovarlar -----
@@ -888,7 +963,7 @@
       $("inpDebtAmount").max = cur.debt_uzs;
       $("custProfileHistory").innerHTML = !h ? '<div class="text-xs text-slate-400 py-2">Yuklanmoqda…</div>'
         : h.receipts.length ? h.receipts.map(function (r) {
-          return '<div class="p-2 rounded-xl bg-slate-50 border border-slate-200/80 flex justify-between text-xs"><div><div class="font-bold">' + esc(r.receipt_code) + '</div><div class="text-[11px] text-slate-500">' + esc(fmtTime(r.created_at)) + " • " + esc(r.payment_method) + '</div></div><div class="font-bold">' + (r.refunded ? '<span class="line-through opacity-60">' + uzs(r.total_uzs) + '</span>' : uzs(r.total_uzs)) + "</div></div>";
+          return '<div class="p-2 rounded-xl bg-slate-50 border border-slate-200/80 flex justify-between text-xs"><div><div class="font-bold">' + esc(r.receipt_code) + '</div><div class="text-[11px] text-slate-500">' + esc(fmtTime(r.created_at)) + " • " + esc(r.payment_method) + '</div></div><div class="font-bold">' + (r.refunded ? '<span class="line-through opacity-60">' + uzs(r.original_total_uzs) + '</span>' : uzs(r.total_uzs)) + "</div></div>";
         }).join("") : '<div class="text-xs text-slate-400 py-2">Hali xarid yo\'q.</div>';
     }
 
@@ -902,9 +977,10 @@
       var f = $("recMethodFilter").value;
       var list = S.receipts.filter(function (r) { return f === "ALL" || r.payment_method === f; });
       $("receiptsTableBody").innerHTML = list.length ? list.map(function (r) {
-        var rf = r.refunded;
-        return '<tr class="hover:bg-slate-50' + (rf ? " opacity-60" : "") + '"><td class="py-3 px-4 font-mono-code font-bold text-xs text-indigo-600">' + esc(r.receipt_code) + '</td><td class="py-3 px-4 text-xs text-slate-500">' + esc(fmtTime(r.created_at)) + '</td><td class="py-3 px-4 font-semibold text-slate-900">' + esc(r.customer_name) + '</td><td class="py-3 px-4 text-xs text-slate-600">' + esc(r.items) + '</td><td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-semibold">' + esc(r.payment_method) + '</span></td><td class="py-3 px-4 text-right font-bold text-slate-900">' + (rf ? '<span class="line-through">' : "<span>") + uzs(r.total_uzs) + '</span></td><td class="py-3 px-4 text-right">' + (rf ? '<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-700 text-xs font-semibold">Qaytarilgan</span>' : '<button type="button" data-refund="' + esc(r.receipt_code) + '" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs">Qaytarish</button>') + "</td></tr>";
+        var rf = r.refunded, part = !rf && r.refunded_uzs > 0;
+        return '<tr class="hover:bg-slate-50' + (rf ? " opacity-60" : "") + '"><td class="py-3 px-4 font-mono-code font-bold text-xs text-indigo-600">' + esc(r.receipt_code) + '</td><td class="py-3 px-4 text-xs text-slate-500">' + esc(fmtTime(r.created_at)) + '</td><td class="py-3 px-4 font-semibold text-slate-900">' + esc(r.customer_name) + '</td><td class="py-3 px-4 text-xs text-slate-600">' + esc(r.items) + '</td><td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-semibold">' + esc(r.payment_method) + '</span></td><td class="py-3 px-4 text-right font-bold text-slate-900">' + (rf ? '<span class="line-through">' + uzs(r.original_total_uzs) + "</span>" : "<span>" + uzs(r.total_uzs) + "</span>" + (part ? '<div class="text-[11px] font-normal text-rose-600">−' + uzs(r.refunded_uzs) + " qaytarilgan</div>" : "")) + '</td><td class="py-3 px-4 text-right">' + (rf ? '<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-700 text-xs font-semibold">Qaytarilgan</span>' : '<button type="button" data-refund="' + esc(r.receipt_code) + '" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs">Qaytarish</button>') + "</td></tr>";
       }).join("") : '<tr><td colspan="7" class="py-8 text-center text-slate-400 text-xs">Hozircha cheklar yo\'q.</td></tr>';
+      $("btnMoreReceipts").classList.toggle("hidden", !S.recMore);
     }
 
     // ----- Botlar -----
@@ -959,7 +1035,22 @@
     function modal(id, open) { $(id).classList.toggle("hidden", !open); }
 
     function init() {
-      $("btnLogout").addEventListener("click", logout);
+      $("btnLogout").addEventListener("click", function () {
+        // serverdagi tokenni ham bekor qilamiz (xato bo'lsa ham mahalliy chiqish bajariladi)
+        var tok = S.token;
+        (tok ? api("POST", "/api/store/logout", null, { Authorization: "Bearer " + tok }) : Promise.resolve()).catch(function () {}).then(logout);
+      });
+      $("btnChangePw").addEventListener("click", function () { $("formPassword").reset(); modal("modalPassword", true); });
+      $("formPassword").addEventListener("submit", function (e) {
+        e.preventDefault();
+        if ($("inpPwNew").value !== $("inpPwNew2").value) { toast("Yangi parollar mos kelmadi.", "warning"); return; }
+        storeApi("POST", "/api/store/change-password", { current_password: $("inpPwCur").value, new_password: $("inpPwNew").value })
+          .then(function (r) {
+            S.token = r.access_token;
+            try { sessionStorage.setItem("hg_token", S.token); } catch (x) {}
+            $("formPassword").reset(); modal("modalPassword", false); toast("Parol almashtirildi. Boshqa qurilmalardagi sessiyalar yopildi.", "info");
+          }).catch(fail);
+      });
       $("formLogin").addEventListener("submit", onLogin);
       $("formChange").addEventListener("submit", onChangePassword);
       $("inNewPw").addEventListener("input", renderPwChecklist);
@@ -1036,17 +1127,66 @@
           .then(function () { toast("+10 dona kirim qilindi.", "info"); return refreshAll(); }).catch(fail);
       });
 
+      var refundCode = null, refundData = null;
+      function refundErr(err) { fail(err); }
+      function doRefund(body) {
+        var code = refundCode; if (!code) return;
+        $("btnRefundSelected").disabled = true; $("btnRefundAll").disabled = true;
+        storeApi("POST", "/api/store/sales/" + encodeURIComponent(code) + "/refund", body)
+          .then(function (r) {
+            modal("modalRefund", false);
+            toast(code + ": " + uzs(r.refund_uzs) + " qaytarildi." + (r.stock_restored ? "" : " Diqqat: omborga qoldiq to'liq tiklanmadi (eski chek yoki tovar o'chirilgan)."), r.stock_restored ? "info" : "warning");
+            return refreshAll();
+          }).catch(refundErr).finally(function () { $("btnRefundSelected").disabled = false; $("btnRefundAll").disabled = false; });
+      }
       $("receiptsTableBody").addEventListener("click", function (e) {
         var b = e.target.closest("[data-refund]"); if (!b) return;
-        var code = b.getAttribute("data-refund");
-        if (!window.confirm(code + " chekini to'liq qaytarasizmi? Tovarlar omborga qaytadi, tushum va mijoz hisobi tuzatiladi.")) return;
-        b.disabled = true;
-        storeApi("POST", "/api/store/sales/" + encodeURIComponent(code) + "/refund")
-          .then(function (r) {
-            toast(code + " qaytarildi." + (r.had_items && r.stock_restored ? "" : " Diqqat: omborga qoldiq to'liq tiklanmadi (eski chek yoki tovar o'chirilgan)."), r.stock_restored ? "info" : "warning");
-            return refreshAll();
-          }).catch(function (err) { b.disabled = false; fail(err); });
+        var code = b.getAttribute("data-refund"); b.disabled = true;
+        storeApi("GET", "/api/store/sales/" + encodeURIComponent(code)).then(function (d) {
+          refundCode = code; refundData = d;
+          $("refundTitle").textContent = code + " chekini qaytarish";
+          var rows = d.lines.map(function (l, idx) {
+            var left = l.qty - l.refunded_qty;
+            return '<div class="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200"><div class="min-w-0"><div class="font-semibold text-slate-900 truncate">' + esc(l.name) + '</div><div class="text-[11px] text-slate-500">Sotilgan: ' + esc(l.qty) + (l.refunded_qty ? " • qaytarilgan: " + esc(l.refunded_qty) : "") + " • " + uzs(l.line_total_uzs) + '</div></div>' +
+              (left > 0 ? '<input type="number" min="0" max="' + left + '" value="0" data-rf-idx="' + idx + '" class="w-20 px-2 py-1.5 rounded-lg border border-slate-300 text-sm text-right">' : '<span class="text-[11px] text-slate-400">to\'liq qaytgan</span>') + "</div>";
+          }).join("");
+          $("refundBody").innerHTML = d.lines.length ? rows : '<div class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">Bu eski chek: tovar qatorlari saqlanmagan, faqat to\'liq qaytarish mumkin.</div>';
+          $("btnRefundSelected").classList.toggle("hidden", !d.lines.length);
+          modal("modalRefund", true);
+        }).catch(fail).finally(function () { b.disabled = false; });
       });
+      $("btnRefundAll").addEventListener("click", function () {
+        if (!refundCode || !window.confirm(refundCode + " chekining qolgan hammasi qaytarilsinmi?")) return;
+        doRefund(undefined);
+      });
+      $("btnRefundSelected").addEventListener("click", function () {
+        if (!refundData) return;
+        var items = [];
+        document.querySelectorAll("#refundBody [data-rf-idx]").forEach(function (inp) {
+          var q = parseInt(inp.value, 10) || 0, l = refundData.lines[Number(inp.getAttribute("data-rf-idx"))];
+          if (q > 0 && l) items.push({ sku: l.sku, qty: q });
+        });
+        if (!items.length) { toast("Qaytariladigan miqdorni kiriting.", "warning"); return; }
+        doRefund({ items: items });
+      });
+      $("btnMoreReceipts").addEventListener("click", function () {
+        var btn = $("btnMoreReceipts"); btn.disabled = true;
+        storeApi("GET", "/api/store/sales?limit=" + PAGE + "&offset=" + S.receipts.length + "&q=" + encodeURIComponent(S.recQ || ""))
+          .then(function (more) { S.receipts = S.receipts.concat(more); S.recMore = more.length >= PAGE; renderReceipts(); })
+          .catch(fail).finally(function () { btn.disabled = false; });
+      });
+      var recTimer = null;
+      $("recSearch").addEventListener("input", function () {
+        clearTimeout(recTimer);
+        recTimer = setTimeout(function () { S.recQ = $("recSearch").value.trim(); refreshAll().catch(fail); }, 350);
+      });
+      $("btnExportSales").addEventListener("click", function () {
+        var q = [], f = $("recFrom").value, t = $("recTo").value;
+        if (f) q.push("from_date=" + f); if (t) q.push("to_date=" + t);
+        download("/api/store/export/sales" + (q.length ? "?" + q.join("&") : ""), "cheklar.csv");
+      });
+      $("btnExportProducts").addEventListener("click", function () { download("/api/store/export/products", "tovarlar.csv"); });
+      $("btnExportCustomers").addEventListener("click", function () { download("/api/store/export/customers", "mijozlar.csv"); });
 
       // Mijozlar
       $("custSearchInput").addEventListener("input", renderCustomers);
@@ -1059,14 +1199,29 @@
         S.selectedCustId = Number(tr.getAttribute("data-cid"));
         renderCustomers(); loadHistory(S.selectedCustId);
       });
-      $("btnOpenAddCustomer").addEventListener("click", function () { modal("modalCustomer", true); });
+      $("btnOpenAddCustomer").addEventListener("click", function () {
+        S.editCustId = null; $("formAddCustomer").reset(); $("inpCustPhone").value = "+998 ";
+        $("modalCustomerTitle").textContent = "Yangi Mijoz Qo'shish"; modal("modalCustomer", true);
+      });
       $("formAddCustomer").addEventListener("submit", function (e) {
         e.preventDefault();
-        storeApi("POST", "/api/store/customers", { full_name: $("inpCustName").value.trim(), phone: $("inpCustPhone").value.trim() })
-          .then(function (c) {
-            modal("modalCustomer", false); $("formAddCustomer").reset(); $("inpCustPhone").value = "+998 ";
-            S.selectedCustId = c.id; toast("Mijoz qo'shildi.", "info"); return refreshAll();
-          }).catch(fail);
+        var body = { full_name: $("inpCustName").value.trim(), phone: $("inpCustPhone").value.trim() }, editing = S.editCustId;
+        var req = editing ? storeApi("PATCH", "/api/store/customers/" + editing, body) : storeApi("POST", "/api/store/customers", body);
+        req.then(function (c) {
+          modal("modalCustomer", false); $("formAddCustomer").reset(); $("inpCustPhone").value = "+998 "; S.editCustId = null;
+          S.selectedCustId = c.id; toast(editing ? "Mijoz yangilandi." : "Mijoz qo'shildi.", "info"); return refreshAll();
+        }).catch(fail);
+      });
+      $("btnEditCust").addEventListener("click", function () {
+        var c = currentCustomer(); if (!c) return;
+        S.editCustId = c.id; $("modalCustomerTitle").textContent = "Mijozni tahrirlash";
+        $("inpCustName").value = c.full_name; $("inpCustPhone").value = c.phone; modal("modalCustomer", true);
+      });
+      $("btnDelCust").addEventListener("click", function () {
+        var c = currentCustomer(); if (!c) return;
+        if (c.debt_uzs > 0) { toast("Qarzi bor mijozni o'chirib bo'lmaydi. Avval qarzni so'ndiring.", "warning"); return; }
+        if (!window.confirm("'" + c.full_name + "' mijozini o'chirasizmi? Eski cheklar saqlanib qoladi.")) return;
+        storeApi("DELETE", "/api/store/customers/" + c.id).then(function () { toast("Mijoz o'chirildi.", "info"); return refreshAll(); }).catch(fail);
       });
       $("btnGiveBonus").addEventListener("click", function () {
         var c = currentCustomer(); if (!c) return;

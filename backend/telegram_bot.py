@@ -235,11 +235,16 @@ def build_daily_report(db: Session, store: StoreTenant, day: date) -> str:
         by_method[r.payment_method] = by_method.get(r.payment_method, 0) + r.total_uzs
 
     top = db.execute(
-        select(SaleItem.name, func.sum(SaleItem.qty), func.sum(SaleItem.line_total_uzs))
+        select(
+            SaleItem.name,
+            func.sum(SaleItem.qty - SaleItem.refunded_qty),
+            func.sum(SaleItem.line_total_uzs * (SaleItem.qty - SaleItem.refunded_qty) / SaleItem.qty),
+        )
         .join(SaleReceipt, SaleReceipt.id == SaleItem.receipt_id)
         .where(*in_day)
         .group_by(SaleItem.name)
-        .order_by(func.sum(SaleItem.qty).desc())
+        .having(func.sum(SaleItem.qty - SaleItem.refunded_qty) > 0)
+        .order_by(func.sum(SaleItem.qty - SaleItem.refunded_qty).desc())
         .limit(5)
     ).all()
 

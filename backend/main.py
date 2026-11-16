@@ -1,17 +1,23 @@
+import csv
+import io
+import logging
 import os
 import re
 import secrets
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
+from fractions import Fraction
 from typing import Literal
 
 import jwt
 import pyotp
 from fastapi import BackgroundTasks, Body, Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pwdlib import PasswordHash
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, text
+from sqlalchemy import case, func, or_, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from db import engine, get_db
@@ -21,6 +27,7 @@ from models import Base, Customer, Product, SaleItem, SaleReceipt, SecurityAudit
 # ---------------------------------------------------------------------------
 # Sozlamalar
 # ---------------------------------------------------------------------------
+log = logging.getLogger("hisobgo")
 ENV = os.getenv("ENV", "production").lower()
 IS_DEV = ENV in ("dev", "development", "test")
 
@@ -49,13 +56,28 @@ pwd_hasher = PasswordHash.recommended()  # Argon2id
 _DUMMY_HASH = pwd_hasher.hash("dummy-password-for-timing")  # mavjud bo'lmagan login uchun vaqt tenglashtirish
 
 
+_MIGRATIONS = [
+    "ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS customer_id INTEGER",
+    "ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ",
+    "ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS refunded_uzs BIGINT NOT NULL DEFAULT 0",
+    "ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS idem_key VARCHAR(64)",
+    "ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS refunded_qty INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE stores ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_code ON sale_receipts (store_id, receipt_code)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_idem ON sale_receipts (store_id, idem_key)",
+]
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
-    if engine.dialect.name == "postgresql":  # mavjud jadvalga yangi ustun (create_all buni qilmaydi)
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS customer_id INTEGER"))
-            conn.execute(text("ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ"))
+    if engine.dialect.name == "postgresql":  # mavjud jadvallarga yangi ustun/indeks (create_all buni qilmaydi)
+        for stmt in _MIGRATIONS:
+            try:  # har biri alohida: bittasi muvaffaqiyatsiz bo'lsa ham server ishga tushadi
+                with engine.begin() as conn:
+                    conn.execute(text(stmt))
+            except Exception:
+                log.exception("Migratsiya bajarilmadi: %s", stmt)
     yield
 
 
@@ -71,7 +93,7 @@ app.add_middleware(
     allow_origins=CORS_ORIGINS or (["*"] if IS_DEV else []),
     allow_credentials=False,  # Bearer/header ishlatiladi, cookie yo'q
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
-    allow_headers=["Authorization", "Content-Type", "X-Superadmin-Key", "X-Superadmin-TOTP"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Superadmin-Key", "X-Superadmin-TOTP"],
 )
 
 
@@ -240,6 +262,8 @@ def current_store(
         raise HTTPException(status_code=403, detail="Do'kon hisobi Superadmin tomonidan vaqtincha bloklangan")
     if st == "EXPIRED":
         raise HTTPException(status_code=402, detail="Abonent to'lovi muddati tugagan")
+    if int(data.get("tv", 0)) != (store.token_version or 0):
+        raise HTTPException(status_code=401, detail="Sessiya bekor qilingan. Qayta kiring")
     if store.must_change_password:
         raise HTTPException(status_code=403, detail="Avval bir martalik parolni almashtiring")
     return store
@@ -309,6 +333,7 @@ def reset_store_otp(login: str, db: Session = Depends(get_db)):
     otp_plain = generate_one_time_password()
     store.password_hash = pwd_hasher.hash(otp_plain)
     store.must_change_password = True
+    store.token_version = (store.token_version or 0) + 1  # eski sessiyalar bekor
     store.failed_logins = 0
     store.locked_until = None
     audit(db, "superadmin", "ISSUE_OTP", f"'{store.name}' uchun yangi OTP berildi")
@@ -384,6 +409,15 @@ def _check_credentials(db: Session, login: str, password: str) -> StoreTenant:
     return store
 
 
+def issue_token(store: StoreTenant) -> str:
+    now = utcnow()
+    return jwt.encode(
+        {"sub": store.login, "sid": store.id, "tv": store.token_version or 0, "iat": now, "exp": now + timedelta(hours=JWT_TTL_HOURS)},
+        JWT_SECRET,
+        algorithm="HS256",
+    )
+
+
 @app.post("/api/auth/login")
 def store_owner_login(payload: StoreLoginRequest, db: Session = Depends(get_db)):
     store = _check_credentials(db, payload.login, payload.password)
@@ -398,12 +432,7 @@ def store_owner_login(payload: StoreLoginRequest, db: Session = Depends(get_db))
             "must_change_password": True,
             "message": "Bir martalik parol aniqlandi. Davom etish uchun yangi ishonchli parol o'rnating.",
         }
-    now = utcnow()
-    token = jwt.encode(
-        {"sub": store.login, "sid": store.id, "iat": now, "exp": now + timedelta(hours=JWT_TTL_HOURS)},
-        JWT_SECRET,
-        algorithm="HS256",
-    )
+    token = issue_token(store)
     return {"status": "SUCCESS", "access_token": token, "token_type": "bearer", "must_change_password": False}
 
 
@@ -420,10 +449,42 @@ def force_change_initial_password(payload: ForcePasswordChangeRequest, db: Sessi
             detail="Yangi parol kamida 8 belgi, katta/kichik harf, raqam va maxsus belgidan iborat bo'lishi shart",
         )
     store.password_hash = pwd_hasher.hash(payload.new_strong_password)
+    store.token_version = (store.token_version or 0) + 1
     store.must_change_password = False
     audit(db, store.login, "OTP_PASSWORD_CHANGED", f"'{store.name}' egasi parolni almashtirdi")
     db.commit()
     return {"status": "PASSWORD_UPDATED", "must_change_password": False}
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(max_length=256)
+    new_password: str = Field(max_length=256)
+
+
+@app.post("/api/store/change-password")
+def change_password(payload: ChangePasswordRequest, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    # 401/402/403 frontendni tizimdan chiqarib yuboradi, shuning uchun xatolar uchun 400
+    if not pwd_hasher.verify(payload.current_password, store.password_hash):
+        _register_failure(db, store)
+        raise HTTPException(status_code=400, detail="Joriy parol noto'g'ri")
+    if payload.new_password == payload.current_password or not validate_strong_password(payload.new_password):
+        raise HTTPException(
+            status_code=400,
+            detail="Yangi parol joriyidan farq qilishi va kamida 8 belgi, katta/kichik harf, raqam va maxsus belgidan iborat bo'lishi shart",
+        )
+    store.password_hash = pwd_hasher.hash(payload.new_password)
+    store.token_version = (store.token_version or 0) + 1  # boshqa qurilmalardagi sessiyalar bekor bo'ladi
+    audit(db, store.login, "PASSWORD_CHANGED", f"'{store.name}' egasi parolni almashtirdi")
+    db.commit()
+    return {"status": "PASSWORD_UPDATED", "access_token": issue_token(store), "token_type": "bearer"}
+
+
+@app.post("/api/store/logout")
+def store_logout(store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    """Barcha qurilmalardagi joriy tokenlarni serverda bekor qiladi."""
+    store.token_version = (store.token_version or 0) + 1
+    db.commit()
+    return {"status": "LOGGED_OUT"}
 
 
 # ---------------------------------------------------------------------------
@@ -448,6 +509,7 @@ def receipt_out(r: SaleReceipt) -> dict:
         "receipt_code": r.receipt_code, "customer_id": r.customer_id, "customer_name": r.customer_name, "items": r.items_summary,
         "payment_method": r.payment_method, "total_uzs": r.total_uzs, "profit_uzs": r.profit_uzs,
         "created_at": r.created_at, "refunded": r.refunded_at is not None, "refunded_at": r.refunded_at,
+        "refunded_uzs": r.refunded_uzs or 0, "original_total_uzs": r.total_uzs + (r.refunded_uzs or 0),
     }
 
 
@@ -457,8 +519,15 @@ def store_me(store: StoreTenant = Depends(current_store)):
 
 
 @app.get("/api/store/products")
-def list_products(store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
-    rows = db.scalars(select(Product).where(Product.store_id == store.id).order_by(Product.name)).all()
+def list_products(
+    q: str | None = None, limit: int = 2000, offset: int = 0,
+    store: StoreTenant = Depends(current_store), db: Session = Depends(get_db),
+):
+    stmt = select(Product).where(Product.store_id == store.id)
+    if q and q.strip():
+        like = f"%{q.strip().lower()}%"
+        stmt = stmt.where(or_(func.lower(Product.name).like(like), func.lower(Product.sku).like(like)))
+    rows = db.scalars(stmt.order_by(Product.name, Product.id).limit(max(1, min(limit, 5000))).offset(max(0, offset))).all()
     return [product_out(p) for p in rows]
 
 
@@ -532,9 +601,51 @@ def delete_product(sku: str, store: StoreTenant = Depends(current_store), db: Se
 # Mijozlar
 # ---------------------------------------------------------------------------
 @app.get("/api/store/customers")
-def list_customers(store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
-    rows = db.scalars(select(Customer).where(Customer.store_id == store.id).order_by(Customer.full_name)).all()
+def list_customers(
+    q: str | None = None, limit: int = 2000, offset: int = 0,
+    store: StoreTenant = Depends(current_store), db: Session = Depends(get_db),
+):
+    stmt = select(Customer).where(Customer.store_id == store.id)
+    if q and q.strip():
+        like = f"%{q.strip().lower()}%"
+        stmt = stmt.where(or_(func.lower(Customer.full_name).like(like), Customer.phone.like(like)))
+    rows = db.scalars(stmt.order_by(Customer.full_name, Customer.id).limit(max(1, min(limit, 5000))).offset(max(0, offset))).all()
     return [customer_out(c) for c in rows]
+
+
+class CustomerUpdate(BaseModel):
+    full_name: str | None = Field(default=None, min_length=2, max_length=120)
+    phone: str | None = Field(default=None, min_length=7, max_length=32)
+
+
+@app.patch("/api/store/customers/{customer_id}")
+def update_customer(
+    customer_id: int, payload: CustomerUpdate, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)
+):
+    c = db.scalar(select(Customer).where(Customer.id == customer_id, Customer.store_id == store.id).with_for_update())
+    if not c:
+        raise HTTPException(status_code=404, detail="Mijoz topilmadi")
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("full_name") is not None:
+        c.full_name = data["full_name"].strip()
+    if data.get("phone") is not None:
+        c.phone = data["phone"].strip()
+    audit(db, store.login, "UPDATE_CUSTOMER", f"#{c.id} {c.full_name}")
+    db.commit()
+    return customer_out(c)
+
+
+@app.delete("/api/store/customers/{customer_id}")
+def delete_customer(customer_id: int, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    c = db.scalar(select(Customer).where(Customer.id == customer_id, Customer.store_id == store.id).with_for_update())
+    if not c:
+        raise HTTPException(status_code=404, detail="Mijoz topilmadi")
+    if c.debt_uzs > 0:
+        raise HTTPException(status_code=400, detail="Qarzi bor mijozni o'chirib bo'lmaydi. Avval qarzni so'ndiring")
+    audit(db, store.login, "DELETE_CUSTOMER", f"#{c.id} {c.full_name}")
+    db.delete(c)  # eski cheklarda mijoz nomi saqlanib qoladi
+    db.commit()
+    return {"deleted": True}
 
 
 @app.post("/api/store/customers", status_code=201)
@@ -563,12 +674,21 @@ def pay_customer_debt(
 # ---------------------------------------------------------------------------
 # Savdo (POS): narx va qoldiq serverda hisoblanadi, bitta tranzaksiyada
 # ---------------------------------------------------------------------------
+def _new_receipt_code(db: Session, store_id: str) -> str:
+    for _ in range(10):
+        code = "CHK-" + secrets.token_hex(4).upper()
+        if not db.scalar(select(SaleReceipt.id).where(SaleReceipt.store_id == store_id, SaleReceipt.receipt_code == code)):
+            return code
+    raise HTTPException(status_code=500, detail="Chek raqamini yaratib bo'lmadi")
+
+
 @app.post("/api/store/sales", status_code=201)
 def create_sale(
     payload: SaleRequest,
     background: BackgroundTasks,
     store: StoreTenant = Depends(current_store),
     db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=64),
 ):
     # Bir xil SKU takrorlansa birlashtiriladi; deadlock oldini olish uchun tartiblanadi
     qty_by_sku: dict[str, int] = {}
@@ -582,6 +702,11 @@ def create_sale(
         .with_for_update()
     ).all()
     by_sku = {p.sku: p for p in products}
+    idem = (idempotency_key or "").strip() or None
+    if idem:  # tovarlar bloklangandan keyin tekshiriladi: parallel takroriy so'rov birinchisini kutadi
+        prev = db.scalar(select(SaleReceipt).where(SaleReceipt.store_id == store.id, SaleReceipt.idem_key == idem))
+        if prev:
+            return receipt_out(prev)
     missing = [s for s in qty_by_sku if s not in by_sku]
     if missing:
         raise HTTPException(status_code=404, detail=f"Tovar topilmadi: {', '.join(missing)}")
@@ -621,9 +746,11 @@ def create_sale(
         else:
             customer.cashback_uzs += total * CASHBACK_RATE_PCT // 100
 
+    receipt_code = _new_receipt_code(db, store.id)
     receipt = SaleReceipt(
         store_id=store.id,
-        receipt_code="CHK-" + secrets.token_hex(3).upper(),
+        idem_key=idem,
+        receipt_code=receipt_code,
         customer_name=customer.full_name if customer else "Umumiy xaridor",
         customer_id=customer.id if customer else None,
         items_summary=", ".join(parts)[:2000],
@@ -635,7 +762,14 @@ def create_sale(
     db.flush()  # receipt.id kerak
     for p, qty in sold:
         db.add(SaleItem(receipt_id=receipt.id, store_id=store.id, sku=p.sku, name=p.name, qty=qty, line_total_uzs=p.price_uzs * qty))
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        prev = db.scalar(select(SaleReceipt).where(SaleReceipt.store_id == store.id, SaleReceipt.idem_key == idem)) if idem else None
+        if prev:
+            return receipt_out(prev)
+        raise HTTPException(status_code=409, detail="Sotuvni saqlashda to'qnashuv. Qayta urinib ko'ring")
 
     # Omborga xabar: sotuv javobini kechiktirmaslik uchun fon vazifasi
     background.add_task(tg.notify_sale, store.id, {
@@ -650,17 +784,55 @@ def create_sale(
 
 
 @app.get("/api/store/sales")
-def list_sales(limit: int = 100, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+def list_sales(
+    limit: int = 100, offset: int = 0, q: str | None = None,
+    store: StoreTenant = Depends(current_store), db: Session = Depends(get_db),
+):
     limit = max(1, min(limit, 500))
-    rows = db.scalars(
-        select(SaleReceipt).where(SaleReceipt.store_id == store.id).order_by(SaleReceipt.id.desc()).limit(limit)
-    ).all()
+    stmt = select(SaleReceipt).where(SaleReceipt.store_id == store.id)
+    if q and q.strip():
+        like = f"%{q.strip().lower()}%"
+        stmt = stmt.where(or_(func.lower(SaleReceipt.receipt_code).like(like), func.lower(SaleReceipt.customer_name).like(like)))
+    rows = db.scalars(stmt.order_by(SaleReceipt.id.desc()).limit(limit).offset(max(0, offset))).all()
     return [receipt_out(r) for r in rows]
 
 
+def _receipt_detail(db: Session, r: SaleReceipt) -> dict:
+    items = db.scalars(select(SaleItem).where(SaleItem.receipt_id == r.id).order_by(SaleItem.id)).all()
+    return {
+        **receipt_out(r),
+        "lines": [
+            {"sku": i.sku, "name": i.name, "qty": i.qty, "refunded_qty": i.refunded_qty or 0, "line_total_uzs": i.line_total_uzs}
+            for i in items
+        ],
+    }
+
+
+@app.get("/api/store/sales/{receipt_code}")
+def sale_detail(receipt_code: str, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    r = db.scalar(select(SaleReceipt).where(SaleReceipt.store_id == store.id, SaleReceipt.receipt_code == receipt_code))
+    if not r:
+        raise HTTPException(status_code=404, detail="Chek topilmadi")
+    return _receipt_detail(db, r)
+
+
+class RefundItemIn(BaseModel):
+    sku: str = Field(max_length=64)
+    qty: int = Field(gt=0, le=10**5)
+
+
+class RefundRequest(BaseModel):
+    items: list[RefundItemIn] | None = Field(default=None, max_length=200)  # bo'sh bo'lsa: qolgan hammasi
+
+
 @app.post("/api/store/sales/{receipt_code}/refund")
-def refund_sale(receipt_code: str, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
-    """Chekni to'liq qaytarish: ombor, mijoz hisobi (xarid, nasiya yoki keshbek) tiklanadi."""
+def refund_sale(
+    receipt_code: str,
+    payload: RefundRequest | None = None,
+    store: StoreTenant = Depends(current_store),
+    db: Session = Depends(get_db),
+):
+    """To'liq yoki qisman qaytarish: ombor va mijoz hisobi (xarid, nasiya yoki keshbek) tiklanadi."""
     r = db.scalar(
         select(SaleReceipt)
         .where(SaleReceipt.store_id == store.id, SaleReceipt.receipt_code == receipt_code)
@@ -669,35 +841,91 @@ def refund_sale(receipt_code: str, store: StoreTenant = Depends(current_store), 
     if not r:
         raise HTTPException(status_code=404, detail="Chek topilmadi")
     if r.refunded_at is not None:
-        raise HTTPException(status_code=409, detail="Bu chek allaqachon qaytarilgan")
+        raise HTTPException(status_code=409, detail="Bu chek allaqachon to'liq qaytarilgan")
 
-    items = db.scalars(select(SaleItem).where(SaleItem.receipt_id == r.id)).all()
-    restored = 0
-    for it in sorted(items, key=lambda i: i.sku):
+    items = db.scalars(select(SaleItem).where(SaleItem.receipt_id == r.id).order_by(SaleItem.id).with_for_update()).all()
+    wanted = payload.items if payload and payload.items else None
+    stock_ok = True
+
+    if not items:  # tovar qatorlari saqlanmagan eski chek: faqat to'liq qaytariladi
+        if wanted:
+            raise HTTPException(status_code=400, detail="Eski chekni faqat to'liq qaytarish mumkin")
+        amt, profit_cut, all_done, plan = r.total_uzs, r.profit_uzs, True, []
+        stock_ok = False
+    else:
+        by_sku = {i.sku: i for i in items}
+        req: dict[str, int] = {}
+        if wanted:
+            for w in wanted:
+                req[w.sku] = req.get(w.sku, 0) + w.qty
+        else:
+            req = {i.sku: i.qty - (i.refunded_qty or 0) for i in items if i.qty - (i.refunded_qty or 0) > 0}
+        if not req:
+            raise HTTPException(status_code=409, detail="Qaytariladigan tovar qolmagan")
+        gross_before = Fraction(0)
+        gross_ref = Fraction(0)
+        for sku, q in req.items():
+            it = by_sku.get(sku)
+            if it is None:
+                raise HTTPException(status_code=400, detail=f"Chekda bunday tovar yo'q: {sku}")
+            if q > it.qty - (it.refunded_qty or 0):
+                raise HTTPException(status_code=400, detail=f"'{it.name}': qaytariladigan miqdor oshib ketdi")
+            gross_ref += Fraction(it.line_total_uzs * q, it.qty)
+        for it in items:
+            gross_before += Fraction(it.line_total_uzs * (it.qty - (it.refunded_qty or 0)), it.qty)
+        all_done = all(req.get(i.sku, 0) == i.qty - (i.refunded_qty or 0) for i in items)
+        if all_done:
+            amt, profit_cut = r.total_uzs, r.profit_uzs
+        elif gross_before > 0:
+            share = gross_ref / gross_before
+            amt, profit_cut = int(r.total_uzs * share), int(r.profit_uzs * share)
+        else:
+            amt = profit_cut = 0
+        plan = [(by_sku[sku], q) for sku, q in sorted(req.items())]
+
+    for it, q in plan:
+        it.refunded_qty = (it.refunded_qty or 0) + q
         p = db.scalar(select(Product).where(Product.store_id == store.id, Product.sku == it.sku).with_for_update())
-        if p:  # tovar o'chirilgan bo'lsa, qoldiq tiklanmaydi
-            p.stock_qty += it.qty
-            restored += 1
+        if p:
+            p.stock_qty += q
+        else:
+            stock_ok = False  # tovar o'chirilgan
 
     if r.customer_id is not None:
         c = db.scalar(select(Customer).where(Customer.id == r.customer_id, Customer.store_id == store.id).with_for_update())
         if c:
-            c.total_spent_uzs = max(0, c.total_spent_uzs - r.total_uzs)
+            c.total_spent_uzs = max(0, c.total_spent_uzs - amt)
             if r.payment_method == "Nasiya":
-                c.debt_uzs = max(0, c.debt_uzs - r.total_uzs)
+                c.debt_uzs = max(0, c.debt_uzs - amt)
             else:
-                c.cashback_uzs = max(0, c.cashback_uzs - r.total_uzs * CASHBACK_RATE_PCT // 100)
+                c.cashback_uzs = max(0, c.cashback_uzs - amt * CASHBACK_RATE_PCT // 100)
 
-    r.refunded_at = utcnow()
-    audit(db, store.login, "REFUND_SALE", f"{r.receipt_code}: {r.total_uzs} so'm, {r.payment_method}")
+    r.total_uzs -= amt
+    r.profit_uzs -= profit_cut
+    r.refunded_uzs = (r.refunded_uzs or 0) + amt
+    if all_done:
+        r.refunded_at = utcnow()
+    kind = "toliq" if all_done else "qisman"
+    audit(db, store.login, "REFUND_SALE", f"{r.receipt_code}: {amt} som ({kind}), {r.payment_method}")
     db.commit()
-    return {**receipt_out(r), "stock_restored": bool(items) and restored == len(items), "had_items": bool(items)}
+    return {**_receipt_detail(db, r), "stock_restored": stock_ok, "had_items": bool(items), "refund_uzs": amt}
 
 
 @app.get("/api/store/dashboard")
 def dashboard(store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
-    products = db.scalars(select(Product).where(Product.store_id == store.id)).all()
-    customers = db.scalars(select(Customer).where(Customer.store_id == store.id)).all()
+    inv_value, sku_count = db.execute(
+        select(func.coalesce(func.sum(Product.price_uzs * Product.stock_qty), 0), func.count(Product.id)).where(Product.store_id == store.id)
+    ).one()
+    debt_total, debtor_count, customer_count = db.execute(
+        select(
+            func.coalesce(func.sum(Customer.debt_uzs), 0),
+            func.coalesce(func.sum(case((Customer.debt_uzs > 0, 1), else_=0)), 0),
+            func.count(Customer.id),
+        ).where(Customer.store_id == store.id)
+    ).one()
+    low_products = db.scalars(
+        select(Product).where(Product.store_id == store.id, Product.stock_qty <= 10).order_by(Product.stock_qty, Product.name).limit(50)
+    ).all()
 
     # So'nggi 14 kun (Toshkent kunlari): 7 kunlik grafik + oldingi hafta bilan solishtirish
     today = datetime.now(tg.TZ).date()
@@ -735,13 +963,79 @@ def dashboard(store: StoreTenant = Depends(current_store), db: Session = Depends
         "margin_pct": round(week_profit * 100 / week_revenue, 1) if week_revenue else 0,
         "weekly": weekly,
         "by_method": by_method,
-        "inventory_value_uzs": sum(p.price_uzs * p.stock_qty for p in products),
-        "sku_count": len(products),
-        "total_debt_uzs": sum(c.debt_uzs for c in customers),
-        "debtor_count": sum(1 for c in customers if c.debt_uzs > 0),
-        "customer_count": len(customers),
-        "low_stock": [product_out(p) for p in products if p.stock_qty <= 10],
+        "inventory_value_uzs": int(inv_value),
+        "sku_count": int(sku_count),
+        "total_debt_uzs": int(debt_total),
+        "debtor_count": int(debtor_count),
+        "customer_count": int(customer_count),
+        "low_stock": [product_out(p) for p in low_products],
     }
+
+
+# ---------------------------------------------------------------------------
+# CSV eksport (Excel uchun UTF-8 BOM bilan)
+# ---------------------------------------------------------------------------
+def _csv_cell(v):
+    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + v  # formula in'ektsiyasidan himoya
+    return v
+
+
+def _csv_response(filename: str, header: list[str], rows) -> Response:
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter=";")
+    w.writerow(header)
+    for row in rows:
+        w.writerow([_csv_cell(v) for v in row])
+    return Response(
+        content="\ufeff" + buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/api/store/export/{kind}")
+def export_csv(
+    kind: Literal["sales", "products", "customers"],
+    from_date: date | None = None,
+    to_date: date | None = None,
+    store: StoreTenant = Depends(current_store),
+    db: Session = Depends(get_db),
+):
+    stamp = datetime.now(tg.TZ).strftime("%Y%m%d")
+    if kind == "products":
+        rows = db.scalars(select(Product).where(Product.store_id == store.id).order_by(Product.name).limit(50000)).all()
+        return _csv_response(
+            f"tovarlar-{stamp}.csv",
+            ["SKU", "Nomi", "Toifa", "Tannarx", "Sotuv narxi", "Qoldiq"],
+            [(p.sku, p.name, p.category, p.cost_uzs, p.price_uzs, p.stock_qty) for p in rows],
+        )
+    if kind == "customers":
+        rows = db.scalars(select(Customer).where(Customer.store_id == store.id).order_by(Customer.full_name).limit(50000)).all()
+        return _csv_response(
+            f"mijozlar-{stamp}.csv",
+            ["Ism", "Telefon", "Jami xarid", "Keshbek", "Nasiya qarzi"],
+            [(c.full_name, c.phone, c.total_spent_uzs, c.cashback_uzs, c.debt_uzs) for c in rows],
+        )
+    stmt = select(SaleReceipt).where(SaleReceipt.store_id == store.id)
+    if from_date:
+        stmt = stmt.where(SaleReceipt.created_at >= datetime.combine(from_date, datetime.min.time(), tzinfo=tg.TZ).astimezone(timezone.utc))
+    if to_date:
+        stmt = stmt.where(SaleReceipt.created_at < datetime.combine(to_date + timedelta(days=1), datetime.min.time(), tzinfo=tg.TZ).astimezone(timezone.utc))
+    rows = db.scalars(stmt.order_by(SaleReceipt.id.desc()).limit(50000)).all()
+    return _csv_response(
+        f"cheklar-{stamp}.csv",
+        ["Chek", "Vaqt (Toshkent)", "Mijoz", "Tovarlar", "To'lov turi", "Summa", "Foyda", "Qaytarilgan summa", "Holat"],
+        [
+            (
+                r.receipt_code, _aware(r.created_at).astimezone(tg.TZ).strftime("%d.%m.%Y %H:%M"), r.customer_name,
+                r.items_summary, r.payment_method, r.total_uzs, r.profit_uzs, r.refunded_uzs or 0,
+                "Qaytarilgan" if r.refunded_at else ("Qisman qaytarilgan" if r.refunded_uzs else "Sotilgan"),
+            )
+            for r in rows
+        ],
+    )
+
 
 
 class BonusRequest(BaseModel):
@@ -799,6 +1093,7 @@ def telegram_webhook(
     try:
         tg.handle_update(db, bot, update)
     except Exception:  # Telegram qayta-qayta yubormasligi uchun har doim 200
+        log.exception("Telegram webhook xatosi (bot=%s)", bot)
         db.rollback()
     return {"ok": True}
 

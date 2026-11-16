@@ -35,7 +35,7 @@ docker compose up --build
 |---|---|
 | Superadmin (`X-Superadmin-Key`, ixtiyoriy `X-Superadmin-TOTP`) | `/api/superadmin/stores` (GET/POST), `.../{login}/block`, `.../subscription`, `.../reset-otp`, DELETE, `/api/superadmin/audit-logs` |
 | Autentifikatsiya | `/api/auth/login`, `/api/auth/change-initial-password` (5 ta xato urinishdan keyin 15 daqiqa blok) |
-| Do'kon (Bearer JWT, har so'rovda status/obuna tekshiriladi) | `/api/store/products` (PATCH/DELETE `/{sku}` — tahrirlash/o'chirish), `/customers`, `/sales`, `POST /sales/{chek}/refund` (to'liq qaytarish), `/dashboard` |
+| Do'kon (Bearer JWT, har so'rovda status/obuna tekshiriladi) | `/api/store/products` (PATCH/DELETE `/{sku}` — tahrirlash/o'chirish), `/customers` (PATCH/DELETE `/{id}`), `/sales` (`limit`, `offset`, `q`; `Idempotency-Key` sarlavhasi takroriy yozuvdan himoya qiladi), `GET /sales/{chek}`, `POST /sales/{chek}/refund` (to'liq yoki qisman), `/export/{sales\|products\|customers}` (CSV), `/change-password`, `/logout`, `/dashboard` |
 
 ## Telegram botlar
 

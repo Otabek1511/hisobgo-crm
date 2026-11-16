@@ -7,6 +7,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -32,6 +33,7 @@ class StoreTenant(Base):
     login: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     failed_logins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     plan: Mapped[str] = mapped_column(String(32), default="Start", nullable=False)
@@ -76,6 +78,10 @@ class Customer(Base):
 
 class SaleReceipt(Base):
     __tablename__ = "sale_receipts"
+    __table_args__ = (
+        Index("uq_receipt_code", "store_id", "receipt_code", unique=True),
+        Index("uq_receipt_idem", "store_id", "idem_key", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     store_id: Mapped[str] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True, nullable=False)
@@ -87,7 +93,9 @@ class SaleReceipt(Base):
     total_uzs: Mapped[int] = mapped_column(BigInteger, nullable=False)
     profit_uzs: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # qaytarilgan chek
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # to'liq qaytarilgan chek
+    refunded_uzs: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0", nullable=False)  # jami qaytarilgan summa
+    idem_key: Mapped[str | None] = mapped_column(String(64), nullable=True)  # takroriy yuborishdan himoya
 
     store: Mapped["StoreTenant"] = relationship(back_populates="receipts")
 
@@ -114,6 +122,7 @@ class SaleItem(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
     line_total_uzs: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    refunded_qty: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
 
 
 class TelegramLink(Base):
