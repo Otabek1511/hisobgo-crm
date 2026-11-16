@@ -60,9 +60,9 @@ def test_full_flow():
 
 def test_product_edit_delete_and_refund():
     with TestClient(app) as c:
-        otp = c.post("/api/superadmin/stores", json=_store_payload("shop2"), headers=SA).json()["one_time_password"]
-        c.post("/api/auth/change-initial-password", json={"login": "shop2", "one_time_password": otp, "new_strong_password": STRONG})
-        H = {"Authorization": "Bearer " + c.post("/api/auth/login", json={"login": "shop2", "password": STRONG}).json()["access_token"]}
+        otp = c.post("/api/superadmin/stores", json=_store_payload("refund0"), headers=SA).json()["one_time_password"]
+        c.post("/api/auth/change-initial-password", json={"login": "refund0", "one_time_password": otp, "new_strong_password": STRONG})
+        H = {"Authorization": "Bearer " + c.post("/api/auth/login", json={"login": "refund0", "password": STRONG}).json()["access_token"]}
         for sku in ("A1", "B2"):
             assert c.post("/api/store/products", headers=H, json={
                 "sku": sku, "name": "T" + sku, "cost_uzs": 1000, "price_uzs": 1500, "stock_qty": 10}).status_code == 201
