@@ -43,6 +43,7 @@ class StoreTenant(Base):
 
     products: Mapped[list["Product"]] = relationship(back_populates="store", cascade="all, delete-orphan")
     customers: Mapped[list["Customer"]] = relationship(back_populates="store", cascade="all, delete-orphan")
+    employees: Mapped[list["Employee"]] = relationship(back_populates="store", cascade="all, delete-orphan")
     receipts: Mapped[list["SaleReceipt"]] = relationship(back_populates="store", cascade="all, delete-orphan")
 
 
@@ -73,6 +74,22 @@ class Customer(Base):
     debt_uzs: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
 
     store: Mapped["StoreTenant"] = relationship(back_populates="customers")
+
+
+class Employee(Base):
+    """Do'kon xodimi: ism, telefon, oylik va olingan avans."""
+
+    __tablename__ = "employees"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    store_id: Mapped[str] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True, nullable=False)
+    first_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False)
+    salary_uzs: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    advance_uzs: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+
+    store: Mapped["StoreTenant"] = relationship(back_populates="employees")
 
 
 class SaleReceipt(Base):

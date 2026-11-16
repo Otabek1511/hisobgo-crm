@@ -236,3 +236,32 @@ def test_telegram_flow(monkeypatch):
         # cron kalitsiz rad etiladi
         assert c.post("/api/internal/daily-report").status_code == 403
         c.delete("/api/superadmin/stores/shop2", headers=SA)
+
+
+def test_employees_salary_and_advance():
+    with TestClient(app) as c:
+        H = _login_store(c, "emp1")
+        other = _login_store(c, "emp2")
+        assert c.get("/api/store/employees", headers=H).json() == []
+        bad = c.post("/api/store/employees", headers=H, json={
+            "first_name": "A", "last_name": "Karimov", "phone": "+99890", "salary_uzs": -1, "advance_uzs": 0})
+        assert bad.status_code == 422
+        r = c.post("/api/store/employees", headers=H, json={
+            "first_name": "Jasur", "last_name": "Karimov", "phone": "+998901112233",
+            "salary_uzs": 3000000, "advance_uzs": 500000})
+        assert r.status_code == 201, r.text
+        emp = r.json()
+        assert emp["payable_uzs"] == 2500000
+        assert c.get("/api/store/employees", headers=other).json() == []
+        assert c.patch(f"/api/store/employees/{emp['id']}", headers=other, json={"salary_uzs": 1}).status_code == 404
+        updated = c.patch(f"/api/store/employees/{emp['id']}", headers=H, json={
+            "advance_uzs": 1000000, "phone": "+998907776655"})
+        assert updated.status_code == 200
+        assert updated.json()["advance_uzs"] == 1000000 and updated.json()["payable_uzs"] == 2000000
+        assert updated.json()["salary_uzs"] == 3000000
+        listed = c.get("/api/store/employees?q=karim", headers=H).json()
+        assert len(listed) == 1 and listed[0]["first_name"] == "Jasur"
+        assert c.delete(f"/api/store/employees/{emp['id']}", headers=H).status_code == 200
+        assert c.delete(f"/api/store/employees/{emp['id']}", headers=H).status_code == 404
+        c.delete("/api/superadmin/stores/emp1", headers=SA)
+        c.delete("/api/superadmin/stores/emp2", headers=SA)

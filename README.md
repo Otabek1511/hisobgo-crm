@@ -16,6 +16,7 @@ Ushbu loyiha [HisobGo](https://HisobGo.io/uz) chakana savdo avtomatlashtirish ti
    - **Kassa (POS Terminal):** Shtrixkod / nom bo'yicha qidiruv, savat, chegirma, mijoz tanlash, Naqd / Karta / Click-Payme / **Nasiya** to'lov turlari va chek chiqarish.
    - **Tovarlar va Ombor:** Katalog, SKU, kelish va sotuv narxlari, marja hisobi va omborga kirim qilish.
    - **Mijozlar va Nasiya (CRM):** Mijozlar ro'yxati va nasiya qarzlarini so'ndirish.
+   - **Xodimlar:** Ism, familiya, telefon, oylik va olingan avans.
 
 ## Ishga tushirish
 
@@ -35,7 +36,7 @@ docker compose up --build
 |---|---|
 | Superadmin (`X-Superadmin-Key`, ixtiyoriy `X-Superadmin-TOTP`) | `/api/superadmin/stores` (GET/POST), `.../{login}/block`, `.../subscription`, `.../reset-otp`, DELETE, `/api/superadmin/audit-logs` |
 | Autentifikatsiya | `/api/auth/login`, `/api/auth/change-initial-password` (5 ta xato urinishdan keyin 15 daqiqa blok) |
-| Do'kon (Bearer JWT, har so'rovda status/obuna tekshiriladi) | `/api/store/products` (PATCH/DELETE `/{sku}` — tahrirlash/o'chirish), `/customers` (PATCH/DELETE `/{id}`), `/sales` (`limit`, `offset`, `q`; `Idempotency-Key` sarlavhasi takroriy yozuvdan himoya qiladi), `GET /sales/{chek}`, `POST /sales/{chek}/refund` (to'liq yoki qisman), `/export/{sales\|products\|customers}` (CSV), `/change-password`, `/logout`, `/dashboard` |
+| Do'kon (Bearer JWT, har so'rovda status/obuna tekshiriladi) | `/api/store/products` (PATCH/DELETE `/{sku}` — tahrirlash/o'chirish), `/customers` (PATCH/DELETE `/{id}`), `/employees` (ism, familiya, telefon, oylik, avans), `/sales` (`limit`, `offset`, `q`; `Idempotency-Key` sarlavhasi takroriy yozuvdan himoya qiladi), `GET /sales/{chek}`, `POST /sales/{chek}/refund` (to'liq yoki qisman), `/export/{sales\|products\|customers}` (CSV), `/change-password`, `/logout`, `/dashboard` |
 
 ## Telegram botlar
 

@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from db import engine, get_db
 import telegram_bot as tg
-from models import Base, Customer, Product, SaleItem, SaleReceipt, SecurityAuditLog, StoreTenant, TelegramLink
+from models import Base, Customer, Employee, Product, SaleItem, SaleReceipt, SecurityAuditLog, StoreTenant, TelegramLink
 
 # ---------------------------------------------------------------------------
 # Sozlamalar
@@ -504,6 +504,18 @@ def customer_out(c: Customer) -> dict:
     }
 
 
+def employee_out(e: Employee) -> dict:
+    return {
+        "id": e.id,
+        "first_name": e.first_name,
+        "last_name": e.last_name,
+        "phone": e.phone,
+        "salary_uzs": e.salary_uzs,
+        "advance_uzs": e.advance_uzs,
+        "payable_uzs": e.salary_uzs - e.advance_uzs,
+    }
+
+
 def receipt_out(r: SaleReceipt) -> dict:
     return {
         "receipt_code": r.receipt_code, "customer_id": r.customer_id, "customer_name": r.customer_name, "items": r.items_summary,
@@ -669,6 +681,96 @@ def pay_customer_debt(
     audit(db, store.login, "PAY_DEBT", f"{c.full_name}: {payload.amount_uzs} so'm to'landi, qoldi {c.debt_uzs}")
     db.commit()
     return customer_out(c)
+
+
+# ---------------------------------------------------------------------------
+# Xodimlar: ism, telefon, oylik va olingan avans
+# ---------------------------------------------------------------------------
+class EmployeeIn(BaseModel):
+    first_name: str = Field(min_length=2, max_length=80)
+    last_name: str = Field(min_length=2, max_length=80)
+    phone: str = Field(min_length=7, max_length=32)
+    salary_uzs: int = Field(default=0, ge=0, le=10**12)
+    advance_uzs: int = Field(default=0, ge=0, le=10**12)
+
+
+class EmployeeUpdate(BaseModel):
+    first_name: str | None = Field(default=None, min_length=2, max_length=80)
+    last_name: str | None = Field(default=None, min_length=2, max_length=80)
+    phone: str | None = Field(default=None, min_length=7, max_length=32)
+    salary_uzs: int | None = Field(default=None, ge=0, le=10**12)
+    advance_uzs: int | None = Field(default=None, ge=0, le=10**12)
+
+
+@app.get("/api/store/employees")
+def list_employees(
+    q: str | None = None, limit: int = 2000, offset: int = 0,
+    store: StoreTenant = Depends(current_store), db: Session = Depends(get_db),
+):
+    stmt = select(Employee).where(Employee.store_id == store.id)
+    if q and q.strip():
+        like = f"%{q.strip().lower()}%"
+        stmt = stmt.where(or_(
+            func.lower(Employee.first_name).like(like),
+            func.lower(Employee.last_name).like(like),
+            Employee.phone.like(like),
+        ))
+    rows = db.scalars(stmt.order_by(Employee.last_name, Employee.first_name, Employee.id).limit(max(1, min(limit, 5000))).offset(max(0, offset))).all()
+    return [employee_out(e) for e in rows]
+
+
+@app.post("/api/store/employees", status_code=201)
+def create_employee(payload: EmployeeIn, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    e = Employee(
+        store_id=store.id,
+        first_name=payload.first_name.strip(),
+        last_name=payload.last_name.strip(),
+        phone=payload.phone.strip(),
+        salary_uzs=payload.salary_uzs,
+        advance_uzs=payload.advance_uzs,
+    )
+    if len(e.first_name) < 2 or len(e.last_name) < 2 or len(e.phone) < 7:
+        raise HTTPException(status_code=400, detail="Ism, familiya va telefon to'liq kiriting")
+    db.add(e)
+    audit(db, store.login, "CREATE_EMPLOYEE", f"{e.last_name} {e.first_name}, oylik {e.salary_uzs}, avans {e.advance_uzs}")
+    db.commit()
+    return employee_out(e)
+
+
+@app.patch("/api/store/employees/{employee_id}")
+def update_employee(
+    employee_id: int, payload: EmployeeUpdate, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)
+):
+    e = db.scalar(select(Employee).where(Employee.id == employee_id, Employee.store_id == store.id).with_for_update())
+    if not e:
+        raise HTTPException(status_code=404, detail="Xodim topilmadi")
+    data = payload.model_dump(exclude_unset=True)
+    if "first_name" in data:
+        e.first_name = data["first_name"].strip()
+    if "last_name" in data:
+        e.last_name = data["last_name"].strip()
+    if "phone" in data:
+        e.phone = data["phone"].strip()
+    if len(e.first_name) < 2 or len(e.last_name) < 2 or len(e.phone) < 7:
+        raise HTTPException(status_code=400, detail="Ism, familiya va telefon to'liq kiriting")
+    if data.get("salary_uzs") is not None:
+        e.salary_uzs = data["salary_uzs"]
+    if data.get("advance_uzs") is not None:
+        e.advance_uzs = data["advance_uzs"]
+    audit(db, store.login, "UPDATE_EMPLOYEE", f"#{e.id} {e.last_name} {e.first_name}: oylik {e.salary_uzs}, avans {e.advance_uzs}")
+    db.commit()
+    return employee_out(e)
+
+
+@app.delete("/api/store/employees/{employee_id}")
+def delete_employee(employee_id: int, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    e = db.scalar(select(Employee).where(Employee.id == employee_id, Employee.store_id == store.id).with_for_update())
+    if not e:
+        raise HTTPException(status_code=404, detail="Xodim topilmadi")
+    audit(db, store.login, "DELETE_EMPLOYEE", f"#{e.id} {e.last_name} {e.first_name}")
+    db.delete(e)
+    db.commit()
+    return {"deleted": True}
 
 
 # ---------------------------------------------------------------------------
