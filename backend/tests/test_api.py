@@ -91,7 +91,7 @@ def test_product_edit_delete_and_refund():
         # o'chirish
         assert c.delete("/api/store/products/B2", headers=H).status_code == 200
         assert c.delete("/api/store/products/B2", headers=H).status_code == 404
-        c.delete("/api/superadmin/stores/shop2", headers=SA)
+        c.delete("/api/superadmin/stores/refund0", headers=SA)
 
 
 def _login_store(c, login):
