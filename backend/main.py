@@ -555,6 +555,7 @@ def pay_customer_debt(
     if payload.amount_uzs > c.debt_uzs:
         raise HTTPException(status_code=400, detail="To'lov summasi qarzdan oshib ketdi")
     c.debt_uzs -= payload.amount_uzs
+    audit(db, store.login, "PAY_DEBT", f"{c.full_name}: {payload.amount_uzs} so'm to'landi, qoldi {c.debt_uzs}")
     db.commit()
     return customer_out(c)
 

@@ -336,7 +336,11 @@
             <div class="p-3 rounded-xl bg-amber-50/70 border border-amber-100">
               <div class="text-[11px] font-semibold text-amber-800">Nasiya qarzi</div>
               <div id="custProfileDebt" class="text-base font-extrabold text-amber-950 mt-0.5">0 so'm</div>
-              <button id="btnPayFullDebt" type="button" class="mt-2 w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold">Qarzni so'ndirish</button>
+              <div class="mt-2 flex gap-1.5">
+                <input id="inpDebtAmount" type="number" min="1" step="1" inputmode="numeric" placeholder="Summa" class="min-w-0 flex-1 px-2 py-1.5 rounded-lg border border-amber-200 bg-white text-xs">
+                <button id="btnPayPartialDebt" type="button" class="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white text-xs font-semibold whitespace-nowrap">Qisman to'lash</button>
+              </div>
+              <button id="btnPayFullDebt" type="button" class="mt-1.5 w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold">Hammasini so'ndirish</button>
             </div>
           </div>
           <div class="space-y-2 pt-2 border-t border-slate-200">
@@ -878,6 +882,10 @@
       $("btnGiveBonus").disabled = false;
       $("btnPayFullDebt").disabled = !(cur.debt_uzs > 0);
       $("btnPayFullDebt").classList.toggle("opacity-50", !(cur.debt_uzs > 0));
+      $("btnPayPartialDebt").disabled = !(cur.debt_uzs > 0);
+      $("btnPayPartialDebt").classList.toggle("opacity-50", !(cur.debt_uzs > 0));
+      $("inpDebtAmount").disabled = !(cur.debt_uzs > 0);
+      $("inpDebtAmount").max = cur.debt_uzs;
       $("custProfileHistory").innerHTML = !h ? '<div class="text-xs text-slate-400 py-2">Yuklanmoqda…</div>'
         : h.receipts.length ? h.receipts.map(function (r) {
           return '<div class="p-2 rounded-xl bg-slate-50 border border-slate-200/80 flex justify-between text-xs"><div><div class="font-bold">' + esc(r.receipt_code) + '</div><div class="text-[11px] text-slate-500">' + esc(fmtTime(r.created_at)) + " • " + esc(r.payment_method) + '</div></div><div class="font-bold">' + (r.refunded ? '<span class="line-through opacity-60">' + uzs(r.total_uzs) + '</span>' : uzs(r.total_uzs)) + "</div></div>";
@@ -1064,6 +1072,18 @@
         var c = currentCustomer(); if (!c) return;
         storeApi("POST", "/api/store/customers/" + c.id + "/bonus", { amount_uzs: 10000 })
           .then(function () { toast(c.full_name + " ga +10 000 so'm bonus berildi.", "info"); return refreshAll(); }).catch(fail);
+      });
+      $("btnPayPartialDebt").addEventListener("click", function () {
+        var c = currentCustomer(); if (!c || c.debt_uzs <= 0) return;
+        var amt = parseInt($("inpDebtAmount").value, 10);
+        if (!amt || amt <= 0) { toast("To'lov summasini kiriting.", "warning"); return; }
+        if (amt > c.debt_uzs) { toast("Summa qarzdan oshib ketdi (" + uzs(c.debt_uzs) + ").", "warning"); return; }
+        var btn = $("btnPayPartialDebt"); btn.disabled = true;
+        storeApi("POST", "/api/store/customers/" + c.id + "/pay-debt", { amount_uzs: amt })
+          .then(function (r) {
+            $("inpDebtAmount").value = "";
+            toast(uzs(amt) + " to'landi. Qolgan qarz: " + uzs(r.debt_uzs), "info"); return refreshAll();
+          }).catch(fail).finally(function () { btn.disabled = false; });
       });
       $("btnPayFullDebt").addEventListener("click", function () {
         var c = currentCustomer(); if (!c || c.debt_uzs <= 0) return;
