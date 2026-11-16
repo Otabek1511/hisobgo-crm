@@ -48,7 +48,6 @@ CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o
 JWT_TTL_HOURS = int(os.getenv("JWT_TTL_HOURS", "12"))
 MAX_FAILED_LOGINS = 5
 LOCK_MINUTES = 15
-CASHBACK_RATE_PCT = 3
 PUBLIC_URL = os.getenv("PUBLIC_URL", "https://hisobgo-api.onrender.com")
 CRON_KEY = os.getenv("CRON_KEY", "")
 
@@ -63,6 +62,7 @@ _MIGRATIONS = [
     "ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS idem_key VARCHAR(64)",
     "ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS refunded_qty INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE stores ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE customers DROP COLUMN IF EXISTS cashback_uzs",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_code ON sale_receipts (store_id, receipt_code)",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_idem ON sale_receipts (store_id, idem_key)",
 ]
@@ -500,7 +500,7 @@ def product_out(p: Product) -> dict:
 def customer_out(c: Customer) -> dict:
     return {
         "id": c.id, "full_name": c.full_name, "phone": c.phone,
-        "total_spent_uzs": c.total_spent_uzs, "cashback_uzs": c.cashback_uzs, "debt_uzs": c.debt_uzs,
+        "total_spent_uzs": c.total_spent_uzs, "debt_uzs": c.debt_uzs,
     }
 
 
@@ -743,8 +743,6 @@ def create_sale(
         customer.total_spent_uzs += total
         if payload.payment_method == "Nasiya":
             customer.debt_uzs += total
-        else:
-            customer.cashback_uzs += total * CASHBACK_RATE_PCT // 100
 
     receipt_code = _new_receipt_code(db, store.id)
     receipt = SaleReceipt(
@@ -832,7 +830,7 @@ def refund_sale(
     store: StoreTenant = Depends(current_store),
     db: Session = Depends(get_db),
 ):
-    """To'liq yoki qisman qaytarish: ombor va mijoz hisobi (xarid, nasiya yoki keshbek) tiklanadi."""
+    """To'liq yoki qisman qaytarish: ombor va mijoz hisobi (xarid yoki nasiya) tiklanadi."""
     r = db.scalar(
         select(SaleReceipt)
         .where(SaleReceipt.store_id == store.id, SaleReceipt.receipt_code == receipt_code)
@@ -897,8 +895,6 @@ def refund_sale(
             c.total_spent_uzs = max(0, c.total_spent_uzs - amt)
             if r.payment_method == "Nasiya":
                 c.debt_uzs = max(0, c.debt_uzs - amt)
-            else:
-                c.cashback_uzs = max(0, c.cashback_uzs - amt * CASHBACK_RATE_PCT // 100)
 
     r.total_uzs -= amt
     r.profit_uzs -= profit_cut
@@ -1014,8 +1010,8 @@ def export_csv(
         rows = db.scalars(select(Customer).where(Customer.store_id == store.id).order_by(Customer.full_name).limit(50000)).all()
         return _csv_response(
             f"mijozlar-{stamp}.csv",
-            ["Ism", "Telefon", "Jami xarid", "Keshbek", "Nasiya qarzi"],
-            [(c.full_name, c.phone, c.total_spent_uzs, c.cashback_uzs, c.debt_uzs) for c in rows],
+            ["Ism", "Telefon", "Jami xarid", "Nasiya qarzi"],
+            [(c.full_name, c.phone, c.total_spent_uzs, c.debt_uzs) for c in rows],
         )
     stmt = select(SaleReceipt).where(SaleReceipt.store_id == store.id)
     if from_date:
@@ -1038,10 +1034,6 @@ def export_csv(
 
 
 
-class BonusRequest(BaseModel):
-    amount_uzs: int = Field(gt=0, le=10**9)
-
-
 @app.get("/api/store/customers/{customer_id}/history")
 def customer_history(customer_id: int, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
     c = db.scalar(select(Customer).where(Customer.id == customer_id, Customer.store_id == store.id))
@@ -1057,19 +1049,6 @@ def customer_history(customer_id: int, store: StoreTenant = Depends(current_stor
         .limit(10)
     ).all()
     return {"last_visit": rows[0].created_at if rows else None, "receipts": [receipt_out(r) for r in rows]}
-
-
-@app.post("/api/store/customers/{customer_id}/bonus")
-def give_customer_bonus(
-    customer_id: int, payload: BonusRequest, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)
-):
-    c = db.scalar(select(Customer).where(Customer.id == customer_id, Customer.store_id == store.id).with_for_update())
-    if not c:
-        raise HTTPException(status_code=404, detail="Mijoz topilmadi")
-    c.cashback_uzs += payload.amount_uzs
-    audit(db, store.login, "GIVE_BONUS", f"{c.full_name}: +{payload.amount_uzs} so'm keshbek")
-    db.commit()
-    return customer_out(c)
 
 
 # ---------------------------------------------------------------------------

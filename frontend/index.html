@@ -266,7 +266,7 @@
           <button id="btnClearCart" type="button" class="text-xs font-semibold text-rose-600 hover:underline">Tozalash</button>
         </div>
         <div>
-          <label for="posCustomerSelect" class="block text-xs font-semibold text-slate-700 mb-1">Mijoz (Keshbek / Nasiya)</label>
+          <label for="posCustomerSelect" class="block text-xs font-semibold text-slate-700 mb-1">Mijoz (Nasiya)</label>
           <select id="posCustomerSelect" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
         </div>
         <div id="posCartList" class="space-y-2 max-h-52 overflow-y-auto custom-scroll pr-1"></div>
@@ -349,7 +349,6 @@
                   <th class="py-3 px-4 font-semibold">Mijoz</th>
                   <th class="py-3 px-4 font-semibold">Daraja</th>
                   <th class="py-3 px-4 font-semibold text-right">Jami Xarid</th>
-                  <th class="py-3 px-4 font-semibold text-right">Keshbek</th>
                   <th class="py-3 px-4 font-semibold text-right">Nasiya</th>
                 </tr>
               </thead>
@@ -369,12 +368,7 @@
               <div id="custTierBar" class="h-full bg-indigo-600 rounded-full transition-all duration-300" style="width: 0%"></div>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div class="p-3 rounded-xl bg-indigo-50/70 border border-indigo-100">
-              <div class="text-[11px] font-semibold text-indigo-700">Keshbek balansi</div>
-              <div id="custProfileCashback" class="text-base font-extrabold text-indigo-950 mt-0.5">0 so'm</div>
-              <button id="btnGiveBonus" type="button" class="mt-2 w-full py-1.5 rounded-lg bg-white hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold">+10 000 bonus</button>
-            </div>
+          <div>
             <div class="p-3 rounded-xl bg-amber-50/70 border border-amber-100">
               <div class="text-[11px] font-semibold text-amber-800">Nasiya qarzi</div>
               <div id="custProfileDebt" class="text-base font-extrabold text-amber-950 mt-0.5">0 so'm</div>
@@ -928,8 +922,8 @@
       });
       $("customersTableBody").innerHTML = list.length ? list.map(function (c) {
         var sel = c.id === S.selectedCustId, t = getTier(c.total_spent_uzs).name;
-        return '<tr data-cid="' + esc(c.id) + '" class="cursor-pointer transition ' + (sel ? "bg-indigo-50/80" : "hover:bg-slate-50") + '"><td class="py-3 px-4"><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full ' + (sel ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-700") + ' flex items-center justify-center font-bold text-xs">' + esc(initials(c.full_name)) + '</div><div><div class="font-bold text-slate-900 text-xs sm:text-sm">' + esc(c.full_name) + '</div><div class="text-[11px] text-slate-500 font-mono-code">' + esc(c.phone) + '</div></div></div></td><td class="py-3 px-4"><span class="px-2 py-0.5 rounded-md text-[11px] font-semibold ' + (t === "Gold VIP" ? "bg-amber-100 text-amber-900" : "bg-slate-100 text-slate-700") + '">' + esc(t) + '</span></td><td class="py-3 px-4 text-right font-semibold text-xs sm:text-sm">' + uzs(c.total_spent_uzs) + '</td><td class="py-3 px-4 text-right text-indigo-600 font-semibold text-xs sm:text-sm">' + uzs(c.cashback_uzs) + '</td><td class="py-3 px-4 text-right">' + (c.debt_uzs > 0 ? '<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold text-xs">' + uzs(c.debt_uzs) + "</span>" : '<span class="text-xs text-emerald-600">Yo\'q</span>') + "</td></tr>";
-      }).join("") : '<tr><td colspan="5" class="py-8 text-center text-slate-400 text-xs">Mijoz topilmadi.</td></tr>';
+        return '<tr data-cid="' + esc(c.id) + '" class="cursor-pointer transition ' + (sel ? "bg-indigo-50/80" : "hover:bg-slate-50") + '"><td class="py-3 px-4"><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full ' + (sel ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-700") + ' flex items-center justify-center font-bold text-xs">' + esc(initials(c.full_name)) + '</div><div><div class="font-bold text-slate-900 text-xs sm:text-sm">' + esc(c.full_name) + '</div><div class="text-[11px] text-slate-500 font-mono-code">' + esc(c.phone) + '</div></div></div></td><td class="py-3 px-4"><span class="px-2 py-0.5 rounded-md text-[11px] font-semibold ' + (t === "Gold VIP" ? "bg-amber-100 text-amber-900" : "bg-slate-100 text-slate-700") + '">' + esc(t) + '</span></td><td class="py-3 px-4 text-right font-semibold text-xs sm:text-sm">' + uzs(c.total_spent_uzs) + '</td><td class="py-3 px-4 text-right">' + (c.debt_uzs > 0 ? '<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold text-xs">' + uzs(c.debt_uzs) + "</span>" : '<span class="text-xs text-emerald-600">Yo\'q</span>') + "</td></tr>";
+      }).join("") : '<tr><td colspan="4" class="py-8 text-center text-slate-400 text-xs">Mijoz topilmadi.</td></tr>';
       renderProfile();
     }
 
@@ -943,8 +937,8 @@
         $("custProfileHeader").innerHTML = '<div class="text-xs text-slate-400 py-4 text-center">Mijoz tanlanmagan. «+ Yangi mijoz» tugmasi bilan qo\'shing.</div>';
         ["custProfileHistory"].forEach(function (id) { $(id).innerHTML = ""; });
         $("custTierRemaining").textContent = "—"; $("custTierBar").style.width = "0%";
-        $("custProfileCashback").textContent = uzs(0); $("custProfileDebt").textContent = uzs(0);
-        $("btnGiveBonus").disabled = true; $("btnPayFullDebt").disabled = true;
+        $("custProfileDebt").textContent = uzs(0);
+        $("btnPayFullDebt").disabled = true;
         return;
       }
       var ti = getTier(cur.total_spent_uzs), h = S.hist[cur.id];
@@ -952,9 +946,7 @@
       var rem = Math.max(0, ti.target - cur.total_spent_uzs);
       $("custTierRemaining").textContent = ti.name === "Gold VIP" ? "Maksimal VIP ✓" : uzs(rem) + " qoldi";
       $("custTierBar").style.width = Math.min(100, ti.pct) + "%";
-      $("custProfileCashback").textContent = uzs(cur.cashback_uzs);
       $("custProfileDebt").textContent = uzs(cur.debt_uzs);
-      $("btnGiveBonus").disabled = false;
       $("btnPayFullDebt").disabled = !(cur.debt_uzs > 0);
       $("btnPayFullDebt").classList.toggle("opacity-50", !(cur.debt_uzs > 0));
       $("btnPayPartialDebt").disabled = !(cur.debt_uzs > 0);
@@ -1222,11 +1214,6 @@
         if (c.debt_uzs > 0) { toast("Qarzi bor mijozni o'chirib bo'lmaydi. Avval qarzni so'ndiring.", "warning"); return; }
         if (!window.confirm("'" + c.full_name + "' mijozini o'chirasizmi? Eski cheklar saqlanib qoladi.")) return;
         storeApi("DELETE", "/api/store/customers/" + c.id).then(function () { toast("Mijoz o'chirildi.", "info"); return refreshAll(); }).catch(fail);
-      });
-      $("btnGiveBonus").addEventListener("click", function () {
-        var c = currentCustomer(); if (!c) return;
-        storeApi("POST", "/api/store/customers/" + c.id + "/bonus", { amount_uzs: 10000 })
-          .then(function () { toast(c.full_name + " ga +10 000 so'm bonus berildi.", "info"); return refreshAll(); }).catch(fail);
       });
       $("btnPayPartialDebt").addEventListener("click", function () {
         var c = currentCustomer(); if (!c || c.debt_uzs <= 0) return;

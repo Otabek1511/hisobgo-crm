@@ -166,7 +166,8 @@ def test_partial_refund():
         assert r.json()["refunded_uzs"] == 4000
         assert c.get("/api/store/products", headers=H).json()[0]["stock_qty"] == 10
         cu = c.get("/api/store/customers", headers=H).json()[0]
-        assert cu["total_spent_uzs"] == 0 and cu["cashback_uzs"] == 0
+        assert cu["total_spent_uzs"] == 0 and "cashback_uzs" not in cu
+        assert c.post(f"/api/store/customers/{cust['id']}/bonus", headers=H, json={"amount_uzs": 10000}).status_code == 404
         assert c.post(f"/api/store/sales/{code}/refund", headers=H).status_code == 409
         c.delete("/api/superadmin/stores/ref1", headers=SA)
 

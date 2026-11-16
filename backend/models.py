@@ -70,7 +70,6 @@ class Customer(Base):
     full_name: Mapped[str] = mapped_column(String(120), nullable=False)
     phone: Mapped[str] = mapped_column(String(32), nullable=False)
     total_spent_uzs: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
-    cashback_uzs: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     debt_uzs: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
 
     store: Mapped["StoreTenant"] = relationship(back_populates="customers")
