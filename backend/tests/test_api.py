@@ -261,6 +261,18 @@ def test_employees_salary_and_advance():
         assert updated.json()["salary_uzs"] == 3000000
         listed = c.get("/api/store/employees?q=karim", headers=H).json()
         assert len(listed) == 1 and listed[0]["first_name"] == "Jasur"
+        # avans tarixi: boshlang'ich, qo'lda tuzatish va yangi avans
+        r = c.post(f"/api/store/employees/{emp['id']}/advances", headers=H, json={"amount_uzs": 200000, "note": "Kunlik"})
+        assert r.status_code == 201 and r.json()["advance_uzs"] == 1200000
+        assert c.post(f"/api/store/employees/{emp['id']}/advances", headers=H, json={"amount_uzs": 0}).status_code == 422
+        assert c.post(f"/api/store/employees/{emp['id']}/advances", headers=other, json={"amount_uzs": 5}).status_code == 404
+        hist = c.get(f"/api/store/employees/{emp['id']}/advances", headers=H).json()
+        kinds = [a["kind"] for a in hist["advances"]]
+        assert kinds == ["advance", "adjust", "initial"] and hist["advances"][0]["note"] == "Kunlik"
+        assert [a["amount_uzs"] for a in hist["advances"]] == [200000, 500000, 500000]
+        assert c.get(f"/api/store/employees/{emp['id']}/advances", headers=other).status_code == 404
+        rm = c.delete(f"/api/store/employees/{emp['id']}/advances/{hist['advances'][0]['id']}", headers=H)
+        assert rm.status_code == 200 and rm.json()["advance_uzs"] == 1000000
         assert c.delete(f"/api/store/employees/{emp['id']}", headers=H).status_code == 200
         assert c.delete(f"/api/store/employees/{emp['id']}", headers=H).status_code == 404
         c.delete("/api/superadmin/stores/emp1", headers=SA)

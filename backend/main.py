@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from db import engine, get_db
 import telegram_bot as tg
-from models import Base, Customer, Employee, Product, SaleItem, SaleReceipt, SecurityAuditLog, StoreTenant, TelegramLink
+from models import Base, Customer, Employee, EmployeeAdvance, Product, SaleItem, SaleReceipt, SecurityAuditLog, StoreTenant, TelegramLink
 
 # ---------------------------------------------------------------------------
 # Sozlamalar
@@ -732,6 +732,9 @@ def create_employee(payload: EmployeeIn, store: StoreTenant = Depends(current_st
     if len(e.first_name) < 2 or len(e.last_name) < 2 or len(e.phone) < 7:
         raise HTTPException(status_code=400, detail="Ism, familiya va telefon to'liq kiriting")
     db.add(e)
+    db.flush()
+    if e.advance_uzs > 0:
+        db.add(EmployeeAdvance(store_id=store.id, employee_id=e.id, amount_uzs=e.advance_uzs, kind="initial", note="Boshlang'ich avans"))
     audit(db, store.login, "CREATE_EMPLOYEE", f"{e.last_name} {e.first_name}, oylik {e.salary_uzs}, avans {e.advance_uzs}")
     db.commit()
     return employee_out(e)
@@ -755,9 +758,66 @@ def update_employee(
         raise HTTPException(status_code=400, detail="Ism, familiya va telefon to'liq kiriting")
     if data.get("salary_uzs") is not None:
         e.salary_uzs = data["salary_uzs"]
-    if data.get("advance_uzs") is not None:
+    if data.get("advance_uzs") is not None and data["advance_uzs"] != e.advance_uzs:
+        diff = data["advance_uzs"] - e.advance_uzs
+        db.add(EmployeeAdvance(store_id=store.id, employee_id=e.id, amount_uzs=diff, kind="adjust", note="Qo'lda tuzatish"))
         e.advance_uzs = data["advance_uzs"]
     audit(db, store.login, "UPDATE_EMPLOYEE", f"#{e.id} {e.last_name} {e.first_name}: oylik {e.salary_uzs}, avans {e.advance_uzs}")
+    db.commit()
+    return employee_out(e)
+
+
+class AdvanceIn(BaseModel):
+    amount_uzs: int = Field(gt=0, le=10**10)
+    note: str = Field(default="", max_length=200)
+
+
+def _advance_out(a: EmployeeAdvance) -> dict:
+    return {"id": a.id, "amount_uzs": a.amount_uzs, "note": a.note, "kind": a.kind, "created_at": a.created_at}
+
+
+def _employee_for_update(db: Session, store: StoreTenant, employee_id: int) -> Employee:
+    e = db.scalar(select(Employee).where(Employee.id == employee_id, Employee.store_id == store.id).with_for_update())
+    if not e:
+        raise HTTPException(status_code=404, detail="Xodim topilmadi")
+    return e
+
+
+@app.get("/api/store/employees/{employee_id}/advances")
+def list_advances(employee_id: int, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    e = db.scalar(select(Employee).where(Employee.id == employee_id, Employee.store_id == store.id))
+    if not e:
+        raise HTTPException(status_code=404, detail="Xodim topilmadi")
+    rows = db.scalars(
+        select(EmployeeAdvance).where(EmployeeAdvance.employee_id == e.id).order_by(EmployeeAdvance.id.desc()).limit(300)
+    ).all()
+    return {"employee": employee_out(e), "advances": [_advance_out(a) for a in rows]}
+
+
+@app.post("/api/store/employees/{employee_id}/advances", status_code=201)
+def give_advance(
+    employee_id: int, payload: AdvanceIn, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)
+):
+    e = _employee_for_update(db, store, employee_id)
+    e.advance_uzs += payload.amount_uzs
+    note = payload.note.strip()
+    db.add(EmployeeAdvance(store_id=store.id, employee_id=e.id, amount_uzs=payload.amount_uzs, kind="advance", note=note))
+    audit(db, store.login, "GIVE_ADVANCE", f"{e.last_name} {e.first_name}: +{payload.amount_uzs} som avans")
+    db.commit()
+    return employee_out(e)
+
+
+@app.delete("/api/store/employees/{employee_id}/advances/{advance_id}")
+def delete_advance(
+    employee_id: int, advance_id: int, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)
+):
+    e = _employee_for_update(db, store, employee_id)
+    a = db.scalar(select(EmployeeAdvance).where(EmployeeAdvance.id == advance_id, EmployeeAdvance.employee_id == e.id))
+    if not a:
+        raise HTTPException(status_code=404, detail="Avans yozuvi topilmadi")
+    e.advance_uzs = max(0, e.advance_uzs - a.amount_uzs)  # xato kiritilgan yozuv bekor qilinadi
+    audit(db, store.login, "DELETE_ADVANCE", f"{e.last_name} {e.first_name}: {a.amount_uzs} som yozuvi o'chirildi")
+    db.delete(a)
     db.commit()
     return employee_out(e)
 

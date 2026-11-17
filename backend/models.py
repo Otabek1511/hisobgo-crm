@@ -92,6 +92,20 @@ class Employee(Base):
     store: Mapped["StoreTenant"] = relationship(back_populates="employees")
 
 
+class EmployeeAdvance(Base):
+    """Xodimga berilgan avans yozuvi (kimga, qancha, qachon). Manfiy summa: tuzatish."""
+
+    __tablename__ = "employee_advances"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    store_id: Mapped[str] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True, nullable=False)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True, nullable=False)
+    amount_uzs: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    note: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    kind: Mapped[str] = mapped_column(String(12), default="advance", nullable=False)  # advance | initial | adjust
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class SaleReceipt(Base):
     __tablename__ = "sale_receipts"
     __table_args__ = (
