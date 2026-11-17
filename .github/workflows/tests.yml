@@ -38,3 +38,4 @@ jobs:
           PY
             node --check /tmp/check.js
           done
+          node --check frontend/i18n.js

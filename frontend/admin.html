@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HisobGo — Superadmin</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="i18n.js"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
@@ -21,7 +22,10 @@
           <div id="apiStatus" class="text-[11px] text-slate-400">Server: tekshirilmoqda…</div>
         </div>
       </div>
-      <button id="btnLogout" type="button" class="hidden px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-300 hover:bg-slate-700">Chiqish</button>
+      <div class="flex items-center gap-2">
+        <span id="langSlot"></span>
+        <button id="btnLogout" type="button" class="hidden px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-300 hover:bg-slate-700">Chiqish</button>
+      </div>
     </div>
   </header>
 
@@ -68,7 +72,7 @@
 
       <div id="otpBox" class="hidden bg-amber-50 border border-amber-300 rounded-2xl p-4 text-sm">
         <div class="font-bold text-amber-900">Bir martalik parol — faqat hozir ko'rsatiladi!</div>
-        <div class="mono mt-2 text-amber-950">Login: <b id="otpLogin"></b> &nbsp; Parol: <b id="otpValue"></b></div>
+        <div class="mono mt-2 text-amber-950">Login: <b id="otpLogin" data-nt></b> &nbsp; Parol: <b id="otpValue" data-nt></b></div>
         <div class="mt-2 flex gap-2">
           <button id="btnCopyOtp" type="button" class="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 text-xs font-bold">📋 Nusxalash</button>
           <button id="btnHideOtp" type="button" class="px-3 py-1.5 rounded-lg border border-amber-400 text-xs font-semibold">Yopish</button>

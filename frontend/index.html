@@ -6,6 +6,7 @@
   <title>HisobGo — Do'konlar uchun POS & CRM</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="i18n.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -40,6 +41,7 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <span id="langSlot"></span>
         <button id="btnQuickPosHeader" type="button" class="hidden px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition items-center gap-1.5 shadow-sm">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z"/></svg>
           Tezkor Kassa
@@ -867,20 +869,20 @@
       if (S.chart) S.chart.destroy();
       var DAYS = ["Yak", "Dush", "Sesh", "Chor", "Pay", "Juma", "Shan"];
       var labels = d.weekly.map(function (w, i) {
-        return i === d.weekly.length - 1 ? "Bugun" : DAYS[new Date(w.date + "T12:00:00").getDay()];
+        return HGLang.t(i === d.weekly.length - 1 ? "Bugun" : DAYS[new Date(w.date + "T12:00:00").getDay()]);
       });
       S.chart = new Chart(canvas.getContext("2d"), {
         type: "bar",
         data: {
           labels: labels,
           datasets: [
-            { label: "Tushum (so'm)", data: d.weekly.map(function (w) { return w.revenue_uzs; }), backgroundColor: "rgba(79,70,229,0.88)", borderRadius: 8 },
-            { label: "Sof foyda (so'm)", data: d.weekly.map(function (w) { return w.profit_uzs; }), backgroundColor: "rgba(16,185,129,0.85)", borderRadius: 8 }
+            { label: HGLang.t("Tushum (so'm)"), data: d.weekly.map(function (w) { return w.revenue_uzs; }), backgroundColor: "rgba(79,70,229,0.88)", borderRadius: 8 },
+            { label: HGLang.t("Sof foyda (so'm)"), data: d.weekly.map(function (w) { return w.profit_uzs; }), backgroundColor: "rgba(16,185,129,0.85)", borderRadius: 8 }
           ]
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          scales: { y: { beginAtZero: true, ticks: { callback: function (v) { return v >= 1000000 ? (v / 1000000).toFixed(1) + " mln" : v; } } } }
+          scales: { y: { beginAtZero: true, ticks: { callback: function (v) { return v >= 1000000 ? (v / 1000000).toFixed(1) + HGLang.t(" mln") : v; } } } }
         }
       });
     }
@@ -1452,6 +1454,8 @@
       // Cheklar, Botlar
       $("recMethodFilter").addEventListener("change", renderReceipts);
       $("tabBots").addEventListener("click", onBotsClick);
+
+      HGLang.onChange(function () { if (S.tab === "dashboard" && S.dash) renderDashboard(); });
 
       // Boshlang'ich holat
       renderPwChecklist();
