@@ -61,6 +61,21 @@ class Product(Base):
     stock_qty: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     store: Mapped["StoreTenant"] = relationship(back_populates="products")
+    entries: Mapped[list["StockEntry"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+
+
+class StockEntry(Base):
+    """Omborga kirim: qancha dona va qachon."""
+
+    __tablename__ = "stock_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    store_id: Mapped[str] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True, nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True, nullable=False)
+    qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    product: Mapped["Product"] = relationship(back_populates="entries")
 
 
 class Customer(Base):

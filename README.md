@@ -14,7 +14,7 @@ HisobGo — chakana savdo uchun CRM va POS tizimi. U ko'p do'konli (Multi-Tenant
 3. **Do'kon CRM & POS modullari:**
    - **Dashboard va Analitika:** Tushum, sof foyda, o'rtacha ustama marjasi, ombor qiymati, haftalik savdo grafigi va kam qolgan tovarlar nazorati.
    - **Kassa (POS Terminal):** Shtrixkod / nom bo'yicha qidiruv, savat, chegirma, mijoz tanlash, Naqd / Karta / Click-Payme / **Nasiya** to'lov turlari va chek chiqarish.
-   - **Tovarlar va Ombor:** Katalog, SKU, kelish va sotuv narxlari, marja hisobi va omborga kirim qilish.
+   - **Tovarlar va Ombor:** Katalog, SKU, kelish va sotuv narxlari, marja hisobi va har bir kirimning sana-soati.
    - **Mijozlar va Nasiya (CRM):** Mijozlar ro'yxati va nasiya qarzlarini so'ndirish.
    - **Xodimlar:** Ism, familiya, telefon, oylik va olingan avans.
 

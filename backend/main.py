@@ -22,7 +22,10 @@ from sqlalchemy.orm import Session
 
 from db import engine, get_db
 import telegram_bot as tg
-from models import Base, Customer, Employee, EmployeeAdvance, Product, SaleItem, SaleReceipt, SecurityAuditLog, StoreTenant, TelegramLink
+from models import (
+    Base, Customer, Employee, EmployeeAdvance, Product, SaleItem, SaleReceipt,
+    SecurityAuditLog, StockEntry, StoreTenant, TelegramLink,
+)
 
 # ---------------------------------------------------------------------------
 # Sozlamalar
@@ -490,6 +493,12 @@ def store_logout(store: StoreTenant = Depends(current_store), db: Session = Depe
 # ---------------------------------------------------------------------------
 # Do'kon CRM: tovarlar (har bir so'rov faqat o'z do'koni ma'lumotiga ega)
 # ---------------------------------------------------------------------------
+def _record_intake(db: Session, store_id: str, product: Product, qty: int) -> None:
+    if qty <= 0:
+        return
+    db.add(StockEntry(store_id=store_id, product_id=product.id, qty=qty, created_at=utcnow()))
+
+
 def product_out(p: Product) -> dict:
     return {
         "id": p.id, "sku": p.sku, "name": p.name, "category": p.category,
@@ -553,6 +562,8 @@ def create_product(payload: ProductIn, store: StoreTenant = Depends(current_stor
         raise HTTPException(status_code=400, detail="Bu SKU/shtrixkod allaqachon mavjud")
     p = Product(store_id=store.id, **data)
     db.add(p)
+    db.flush()
+    _record_intake(db, store.id, p, p.stock_qty)
     db.commit()
     return product_out(p)
 
@@ -565,6 +576,7 @@ def restock_product(
     if not p:
         raise HTTPException(status_code=404, detail="Tovar topilmadi")
     p.stock_qty += payload.qty
+    _record_intake(db, store.id, p, payload.qty)
     db.commit()
     return product_out(p)
 
@@ -577,6 +589,7 @@ def update_product(
     if not p:
         raise HTTPException(status_code=404, detail="Tovar topilmadi")
     data = payload.model_dump(exclude_unset=True)
+    old_qty = p.stock_qty
     if "sku" in data:
         new_sku = (data["sku"] or "").strip()
         if not new_sku:
@@ -590,12 +603,29 @@ def update_product(
             raise HTTPException(status_code=400, detail="Tovar nomi bo'sh bo'lishi mumkin emas")
     if "category" in data:
         p.category = (data["category"] or "").strip() or "Umumiy"
-    for f in ("cost_uzs", "price_uzs", "stock_qty"):
+    for f in ("cost_uzs", "price_uzs"):
         if data.get(f) is not None:
             setattr(p, f, data[f])
+    if data.get("stock_qty") is not None:
+        p.stock_qty = data["stock_qty"]
+        _record_intake(db, store.id, p, p.stock_qty - old_qty)
     audit(db, store.login, "UPDATE_PRODUCT", f"{p.sku}: {', '.join(sorted(data))}")
     db.commit()
     return product_out(p)
+
+
+@app.get("/api/store/products/{sku}/entries")
+def list_stock_entries(sku: str, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    p = db.scalar(select(Product).where(Product.store_id == store.id, Product.sku == sku))
+    if not p:
+        raise HTTPException(status_code=404, detail="Tovar topilmadi")
+    rows = db.scalars(
+        select(StockEntry)
+        .where(StockEntry.store_id == store.id, StockEntry.product_id == p.id)
+        .order_by(StockEntry.created_at.desc(), StockEntry.id.desc())
+        .limit(200)
+    ).all()
+    return [{"qty": r.qty, "created_at": r.created_at} for r in rows]
 
 
 @app.delete("/api/store/products/{sku}")

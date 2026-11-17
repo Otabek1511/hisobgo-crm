@@ -238,6 +238,26 @@ def test_telegram_flow(monkeypatch):
         c.delete("/api/superadmin/stores/shop2", headers=SA)
 
 
+def test_stock_entries_keep_time_and_qty():
+    with TestClient(app) as c:
+        H = _login_store(c, "stk1")
+        other = _login_store(c, "stk2")
+        assert c.post("/api/store/products", headers=H, json={
+            "sku": "A1", "name": "Divan", "cost_uzs": 1000, "price_uzs": 2000, "stock_qty": 50}).status_code == 201
+        rows = c.get("/api/store/products/A1/entries", headers=H).json()
+        assert len(rows) == 1 and rows[0]["qty"] == 50 and rows[0]["created_at"]
+        assert c.post("/api/store/products/A1/restock", headers=H, json={"qty": 10}).status_code == 200
+        rows = c.get("/api/store/products/A1/entries", headers=H).json()
+        assert [r["qty"] for r in rows] == [10, 50]
+        assert c.patch("/api/store/products/A1", headers=H, json={"stock_qty": 70}).status_code == 200
+        assert [r["qty"] for r in c.get("/api/store/products/A1/entries", headers=H).json()] == [10, 10, 50]
+        assert c.patch("/api/store/products/A1", headers=H, json={"stock_qty": 60}).status_code == 200
+        assert [r["qty"] for r in c.get("/api/store/products/A1/entries", headers=H).json()] == [10, 10, 50]
+        assert c.get("/api/store/products/A1/entries", headers=other).status_code == 404
+        c.delete("/api/superadmin/stores/stk1", headers=SA)
+        c.delete("/api/superadmin/stores/stk2", headers=SA)
+
+
 def test_employees_salary_and_advance():
     with TestClient(app) as c:
         H = _login_store(c, "emp1")

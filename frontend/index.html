@@ -557,6 +557,19 @@
     </div>
   </div>
 
+  <div id="modalStock" class="hidden fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div>
+          <h3 id="stockTitle" class="font-bold text-lg text-slate-900">Kirimlar</h3>
+          <p id="stockMeta" class="text-xs text-slate-500 mt-0.5"></p>
+        </div>
+        <button type="button" data-close="modalStock" class="text-slate-400 hover:text-slate-700 font-bold" aria-label="Yopish">✕</button>
+      </div>
+      <div id="stockEntries" class="space-y-2 max-h-80 overflow-y-auto custom-scroll"></div>
+    </div>
+  </div>
+
   <div id="modalEmployee" class="hidden fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
       <div class="flex items-center justify-between pb-3 border-b border-slate-200">
@@ -647,6 +660,16 @@
       });
     }
     function uzs(n) { return Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so'm"; }
+    function fmtEntry(iso) {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return String(iso || "");
+      var g = {};
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Asia/Tashkent", hour12: false,
+        day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
+      }).formatToParts(d).forEach(function (p) { if (p.type !== "literal") g[p.type] = p.value; });
+      return g.day + "." + g.month + "." + g.year + " " + g.hour + ":" + g.minute;
+    }
     function fmtTime(iso) {
       if (!iso) return "—";
       try { return new Date(iso).toLocaleString("uz-UZ", { hour12: false, dateStyle: "short", timeStyle: "short" }); } catch (e) { return iso; }
@@ -987,7 +1010,7 @@
       $("inventoryTableBody").innerHTML = list.length ? list.map(function (p) {
         var m = p.cost_uzs > 0 ? Math.round((p.price_uzs - p.cost_uzs) * 100 / p.cost_uzs) : 0;
         var low = p.stock_qty <= 10;
-        return '<tr class="hover:bg-slate-50"><td class="py-3 px-4 font-mono-code text-xs text-slate-600">' + esc(p.sku) + '</td><td class="py-3 px-4 font-bold text-slate-900">' + esc(p.name) + '</td><td class="py-3 px-4 text-xs text-slate-600">' + esc(p.category) + '</td><td class="py-3 px-4 text-right text-slate-600">' + uzs(p.cost_uzs) + '</td><td class="py-3 px-4 text-right font-bold text-slate-900">' + uzs(p.price_uzs) + '</td><td class="py-3 px-4 text-right text-emerald-600 font-semibold">+' + m + '%</td><td class="py-3 px-4 text-center"><span class="px-2.5 py-1 rounded-full font-bold text-xs ' + (low ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800") + '">' + esc(p.stock_qty) + ' dona</span></td><td class="py-3 px-4 text-right"><div class="inline-flex gap-1.5"><button type="button" data-restock="' + esc(p.sku) + '" class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs">+10</button><button type="button" data-edit="' + esc(p.sku) + '" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs">Tahrir</button><button type="button" data-del="' + esc(p.sku) + '" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs">O\'chirish</button></div></td></tr>';
+        return '<tr class="hover:bg-slate-50"><td class="py-3 px-4 font-mono-code text-xs text-slate-600">' + esc(p.sku) + '</td><td class="py-3 px-4"><button type="button" data-entries="' + esc(p.sku) + '" class="font-bold text-slate-900 text-left hover:text-indigo-700">' + esc(p.name) + '</button></td><td class="py-3 px-4 text-xs text-slate-600">' + esc(p.category) + '</td><td class="py-3 px-4 text-right text-slate-600">' + uzs(p.cost_uzs) + '</td><td class="py-3 px-4 text-right font-bold text-slate-900">' + uzs(p.price_uzs) + '</td><td class="py-3 px-4 text-right text-emerald-600 font-semibold">+' + m + '%</td><td class="py-3 px-4 text-center"><span class="px-2.5 py-1 rounded-full font-bold text-xs ' + (low ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800") + '">' + esc(p.stock_qty) + ' dona</span></td><td class="py-3 px-4 text-right"><div class="inline-flex gap-1.5"><button type="button" data-restock="' + esc(p.sku) + '" class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs">+10</button><button type="button" data-edit="' + esc(p.sku) + '" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs">Tahrir</button><button type="button" data-del="' + esc(p.sku) + '" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs">O\'chirish</button></div></td></tr>';
       }).join("") : '<tr><td colspan="8" class="py-8 text-center text-slate-400 text-xs">Tovar topilmadi.</td></tr>';
     }
 
@@ -1160,6 +1183,18 @@
     }
 
     // ----- Hodisalar -----
+    function openStock(sku) {
+      var p = S.products.filter(function (x) { return x.sku === sku; })[0];
+      $("stockTitle").textContent = p ? p.name : sku;
+      $("stockMeta").textContent = (p ? p.sku + " • qoldiq " + p.stock_qty + " dona" : sku);
+      $("stockEntries").innerHTML = '<div class="text-xs text-slate-400 py-3">Yuklanmoqda…</div>';
+      modal("modalStock", true);
+      storeApi("GET", "/api/store/products/" + encodeURIComponent(sku) + "/entries").then(function (rows) {
+        $("stockEntries").innerHTML = rows.length ? rows.map(function (r) {
+          return '<div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200"><b class="text-sm text-slate-900">' + esc(r.qty) + ' dona</b><span class="text-xs font-mono-code text-slate-600">' + esc(fmtEntry(r.created_at)) + "</span></div>";
+        }).join("") : '<div class="text-xs text-slate-400 py-3 text-center">Bu tovar uchun kirim qaydi yo\'q. Yangi kirim shu yerda sana va soat bilan chiqadi.</div>';
+      }).catch(function (e) { modal("modalStock", false); fail(e); });
+    }
     function openProductModal(sku) {
       var p = sku ? S.products.filter(function (x) { return x.sku === sku; })[0] : null;
       S.editSku = p ? p.sku : null;
@@ -1251,6 +1286,8 @@
         }).catch(fail);
       });
       $("inventoryTableBody").addEventListener("click", function (e) {
+        var en = e.target.closest("[data-entries]");
+        if (en) { openStock(en.getAttribute("data-entries")); return; }
         var ed = e.target.closest("[data-edit]");
         if (ed) { openProductModal(ed.getAttribute("data-edit")); return; }
         var dl = e.target.closest("[data-del]");
