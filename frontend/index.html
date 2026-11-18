@@ -604,6 +604,7 @@
           <input id="inpAdvNote" type="text" maxlength="200" placeholder="Ixtiyoriy" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm"></div>
         <button type="submit" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-white text-xs font-bold">Avans berish</button>
       </form>
+      <button id="btnPaySalary" type="button" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">Oylikni to'ladim (avans ushlanadi)</button>
       <div>
         <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Avans tarixi</h4>
         <div id="advHistory" class="space-y-1.5 max-h-72 overflow-auto"></div>
@@ -1154,7 +1155,7 @@
       var cell = function (t, v, c) { return '<div class="p-2 rounded-xl bg-slate-50 border border-slate-200"><div class="text-slate-500">' + t + '</div><div class="font-bold ' + c + '">' + v + "</div></div>"; };
       $("advSummary").innerHTML = cell("Oylik", uzs(e.salary_uzs), "text-slate-900") + cell("Jami avans", uzs(e.advance_uzs), "text-amber-700") +
         cell("Beriladigan", uzs(e.payable_uzs), e.payable_uzs < 0 ? "text-rose-700" : "text-emerald-700");
-      var label = { advance: "Avans", initial: "Boshlang'ich", adjust: "Tuzatish" };
+      var label = { advance: "Avans", initial: "Boshlang'ich", adjust: "Tuzatish", payout: "Oylik to'landi" };
       $("advHistory").innerHTML = d.advances.length ? d.advances.map(function (a) {
         return '<div class="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs"><div class="min-w-0"><div class="font-semibold text-slate-900">' +
           (a.amount_uzs < 0 ? "−" : "+") + uzs(Math.abs(a.amount_uzs)) + ' <span class="font-normal text-slate-500">• ' + esc(label[a.kind] || a.kind) + '</span></div><div class="text-slate-500 truncate">' +
@@ -1566,6 +1567,16 @@
         if (!id || !amt || amt <= 0) { toast("Avans summasini kiriting.", "warning"); return; }
         storeApi("POST", "/api/store/employees/" + id + "/advances", { amount_uzs: amt, note: $("inpAdvNote").value.trim() })
           .then(function () { $("formAdvance").reset(); toast("Avans yozildi.", "info"); return Promise.all([loadAdvances(id), refreshAll()]); })
+          .catch(fail);
+      });
+      $("btnPaySalary").addEventListener("click", function () {
+        var id = S.advEmpId; if (!id) return;
+        var e = (S.employees || []).filter(function (x) { return x.id === id; })[0];
+        var held = e ? Math.min(e.advance_uzs, e.salary_uzs) : 0, paid = e ? e.salary_uzs - held : 0;
+        if (!e || e.salary_uzs <= 0) { toast("Avval xodimning oyligini belgilang.", "warning"); return; }
+        if (!window.confirm(e.last_name + " " + e.first_name + ": " + uzs(paid) + " to'lanadi, " + uzs(held) + " avans ushlanadi. Tasdiqlaysizmi?")) return;
+        storeApi("POST", "/api/store/employees/" + id + "/pay-salary")
+          .then(function (r) { toast("To'langan: " + uzs(r.paid_uzs), "info"); return Promise.all([loadAdvances(id), refreshAll()]); })
           .catch(fail);
       });
       $("advHistory").addEventListener("click", function (ev) {

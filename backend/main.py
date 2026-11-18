@@ -901,6 +901,23 @@ def give_advance(
     return employee_out(e)
 
 
+@app.post("/api/store/employees/{employee_id}/pay-salary")
+def pay_salary(employee_id: int, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    """Oy oxiri hisob-kitobi: oylikdan avans ushlanadi, qolgani to'langan deb yoziladi.
+    Avans oylikdan oshib ketgan bo'lsa, oshgan qismi keyingi oyga qarz bo'lib o'tadi."""
+    e = _employee_for_update(db, store, employee_id)
+    if e.salary_uzs <= 0:
+        raise HTTPException(status_code=400, detail="Avval xodimning oyligini belgilang")
+    held = min(e.advance_uzs, e.salary_uzs)
+    paid = e.salary_uzs - held
+    e.advance_uzs -= held
+    note = f"Oylik to'landi: {paid} so'm (oylik {e.salary_uzs} − avans {held})"
+    db.add(EmployeeAdvance(store_id=store.id, employee_id=e.id, amount_uzs=-held, kind="payout", note=note))
+    audit(db, store.login, "PAY_SALARY", f"{e.last_name} {e.first_name}: {paid} som to'landi, {held} som avans ushlandi")
+    db.commit()
+    return {**employee_out(e), "paid_uzs": paid, "held_uzs": held}
+
+
 @app.delete("/api/store/employees/{employee_id}/advances/{advance_id}")
 def delete_advance(
     employee_id: int, advance_id: int, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)

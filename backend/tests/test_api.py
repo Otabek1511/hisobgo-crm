@@ -386,6 +386,17 @@ def test_employees_salary_and_advance():
         assert c.get(f"/api/store/employees/{emp['id']}/advances", headers=other).status_code == 404
         rm = c.delete(f"/api/store/employees/{emp['id']}/advances/{hist['advances'][0]['id']}", headers=H)
         assert rm.status_code == 200 and rm.json()["advance_uzs"] == 1000000
+        # oylikni to'lash: avans ushlanadi, qolgani to'lanadi
+        assert c.post(f"/api/store/employees/{emp['id']}/pay-salary", headers=other).status_code == 404
+        ps = c.post(f"/api/store/employees/{emp['id']}/pay-salary", headers=H)
+        assert ps.status_code == 200, ps.text
+        assert ps.json()["paid_uzs"] == 2000000 and ps.json()["held_uzs"] == 1000000 and ps.json()["advance_uzs"] == 0
+        h2 = c.get(f"/api/store/employees/{emp['id']}/advances", headers=H).json()["advances"]
+        assert h2[0]["kind"] == "payout" and h2[0]["amount_uzs"] == -1000000
+        # avans oylikdan oshsa, ortig'i keyingi oyga o'tadi
+        c.post(f"/api/store/employees/{emp['id']}/advances", headers=H, json={"amount_uzs": 3500000})
+        ps = c.post(f"/api/store/employees/{emp['id']}/pay-salary", headers=H).json()
+        assert ps["paid_uzs"] == 0 and ps["advance_uzs"] == 500000
         assert c.delete(f"/api/store/employees/{emp['id']}", headers=H).status_code == 200
         assert c.delete(f"/api/store/employees/{emp['id']}", headers=H).status_code == 404
         c.delete("/api/superadmin/stores/emp1", headers=SA)
