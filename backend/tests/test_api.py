@@ -205,6 +205,99 @@ def test_export_and_pagination():
         c.delete("/api/superadmin/stores/exp1", headers=SA)
 
 
+SELLER_PW = "Sotuvchi#2027x"
+
+
+def _make_seller(c, H, login, name="Karim Kassir"):
+    r = c.post("/api/store/staff", headers=H, json={"full_name": name, "login": login})
+    assert r.status_code == 201, r.text
+    otp = r.json()["one_time_password"]
+    first = c.post("/api/auth/login", json={"login": login, "password": otp}).json()
+    assert first["status"] == "FORCE_PASSWORD_CHANGE_REQUIRED" and first["role"] == "seller"
+    assert c.post("/api/auth/change-initial-password",
+                  json={"login": login, "one_time_password": otp, "new_strong_password": SELLER_PW}).status_code == 200
+    ok = c.post("/api/auth/login", json={"login": login, "password": SELLER_PW}).json()
+    assert ok["role"] == "seller"
+    return r.json(), {"Authorization": "Bearer " + ok["access_token"]}
+
+
+def test_seller_role_isolation():
+    with TestClient(app) as c:
+        H = _login_store(c, "own1")
+        _product(c, H, sku="A1", price=1000, cost=400, stock=10)
+        cust = c.post("/api/store/customers", headers=H, json={"full_name": "Ali Vali", "phone": "+998931112233"}).json()
+        staff, S = _make_seller(c, H, "sell1")
+        assert staff["panel_path"] == "seller.html"
+
+        # login band bo'lsa rad etiladi (egasi loginlari, boshqa sotuvchilar, yangi do'kon)
+        assert c.post("/api/store/staff", headers=H, json={"full_name": "Boshqa", "login": "sell1"}).status_code == 409
+        assert c.post("/api/store/staff", headers=H, json={"full_name": "Boshqa", "login": "own1"}).status_code == 409
+        assert c.post("/api/superadmin/stores", json=_store_payload("sell1"), headers=SA).status_code == 400
+
+        # sotuvchi ko'radigan ma'lumot: tannarxsiz, telefonsiz
+        prods = c.get("/api/seller/products", headers=S).json()
+        assert prods and "cost_uzs" not in prods[0] and prods[0]["price_uzs"] == 1000
+        assert c.get("/api/seller/customers?q=a", headers=S).json() == []           # kamida 2 belgi
+        found = c.get("/api/seller/customers?q=ali", headers=S).json()
+        assert found[0]["full_name"] == "Ali Vali" and "phone" not in found[0] and found[0]["phone_hint"] == "2233"
+        assert "debt_uzs" not in found[0]
+
+        # sotuv: javobda foyda yo'q, chegirma cheklangan
+        body = {"items": [{"sku": "A1", "qty": 2}], "payment_method": "Naqd", "customer_id": cust["id"]}
+        assert c.post("/api/seller/sales", headers=S, json={**body, "discount_pct": 11}).status_code == 400
+        r = c.post("/api/seller/sales", headers={**S, "Idempotency-Key": "s-1"}, json=body)
+        assert r.status_code == 201, r.text
+        assert "profit_uzs" not in r.json() and r.json()["total_uzs"] == 2000 and r.json()["seller_name"] == "Karim Kassir"
+        again = c.post("/api/seller/sales", headers={**S, "Idempotency-Key": "s-1"}, json=body)
+        assert again.json()["receipt_code"] == r.json()["receipt_code"]
+        mine = c.get("/api/seller/sales", headers=S).json()
+        assert len(mine) == 1 and "profit_uzs" not in mine[0]
+
+        # egasi endpointlari sotuvchiga yopiq
+        for method, url in [
+            ("get", "/api/store/me"), ("get", "/api/store/products"), ("get", "/api/store/customers"),
+            ("get", "/api/store/dashboard"), ("get", "/api/store/sales"), ("get", "/api/store/employees"),
+            ("get", "/api/store/staff"), ("get", "/api/store/export/sales"), ("get", "/api/store/bots"),
+        ]:
+            assert getattr(c, method)(url, headers=S).status_code == 403, url
+        code = r.json()["receipt_code"]
+        assert c.post(f"/api/store/sales/{code}/refund", headers=S).status_code == 403
+        assert c.post("/api/store/sales", headers=S, json=body).status_code == 403
+        assert c.post("/api/store/staff", headers=S, json={"full_name": "X Y", "login": "hack1"}).status_code == 403
+        # egasi tokeni sotuvchi endpointlariga kira olmaydi
+        assert c.get("/api/seller/products", headers=H).status_code == 403
+
+        # egasi: sotuvchi nomi va foydani ko'radi
+        rec = c.get("/api/store/sales", headers=H).json()[0]
+        assert rec["seller_name"] == "Karim Kassir" and rec["profit_uzs"] == 1200
+        lst = c.get("/api/store/staff", headers=H).json()
+        assert lst[0]["today_count"] == 1 and lst[0]["today_total_uzs"] == 2000
+
+        # bloklash: ochiq sessiya yopiladi, qayta yoqilgach eski token ishlamaydi
+        sid = staff["id"]
+        assert c.patch(f"/api/store/staff/{sid}", headers=H, json={"active": False}).status_code == 200
+        assert c.get("/api/seller/products", headers=S).status_code in (401, 403)
+        assert c.post("/api/auth/login", json={"login": "sell1", "password": SELLER_PW}).status_code == 403
+        assert c.patch(f"/api/store/staff/{sid}", headers=H, json={"active": True}).status_code == 200
+        assert c.get("/api/seller/products", headers=S).status_code == 401
+        S = {"Authorization": "Bearer " + c.post("/api/auth/login", json={"login": "sell1", "password": SELLER_PW}).json()["access_token"]}
+
+        # parolni o'zgartirish va qayta tiklash
+        r = c.post("/api/seller/change-password", headers=S, json={"current_password": SELLER_PW, "new_password": "Yangi#Parol2027"})
+        assert r.status_code == 200
+        assert c.get("/api/seller/products", headers=S).status_code == 401
+        rs = c.post(f"/api/store/staff/{sid}/reset-password", headers=H)
+        assert rs.status_code == 200 and rs.json()["one_time_password"].startswith("OTP-")
+        assert c.post("/api/auth/login", json={"login": "sell1", "password": rs.json()["one_time_password"]}).json()["status"] == "FORCE_PASSWORD_CHANGE_REQUIRED"
+
+        # boshqa do'kon egasi bu sotuvchini boshqara olmaydi
+        H2 = _login_store(c, "own2")
+        assert c.delete(f"/api/store/staff/{sid}", headers=H2).status_code == 404
+        assert c.delete(f"/api/store/staff/{sid}", headers=H).status_code == 200
+        c.delete("/api/superadmin/stores/own1", headers=SA)
+        c.delete("/api/superadmin/stores/own2", headers=SA)
+
+
 def test_telegram_flow(monkeypatch):
     import telegram_bot as tg
 

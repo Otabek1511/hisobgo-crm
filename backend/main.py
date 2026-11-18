@@ -24,7 +24,7 @@ from db import engine, get_db
 import telegram_bot as tg
 from models import (
     Base, Customer, Employee, EmployeeAdvance, Product, SaleItem, SaleReceipt,
-    SecurityAuditLog, StockEntry, StoreTenant, TelegramLink,
+    SecurityAuditLog, StaffUser, StockEntry, StoreTenant, TelegramLink,
 )
 
 # ---------------------------------------------------------------------------
@@ -65,6 +65,8 @@ _MIGRATIONS = [
     "ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS idem_key VARCHAR(64)",
     "ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS refunded_qty INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE stores ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS staff_id INTEGER",
+    "ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS seller_name VARCHAR(120) NOT NULL DEFAULT ''",
     "ALTER TABLE customers DROP COLUMN IF EXISTS cashback_uzs",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_code ON sale_receipts (store_id, receipt_code)",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_idem ON sale_receipts (store_id, idem_key)",
@@ -140,6 +142,15 @@ def _aware(dt: datetime) -> datetime:
 
 def get_store_by_login(db: Session, login: str) -> StoreTenant | None:
     return db.scalar(select(StoreTenant).where(StoreTenant.login == login.strip().lower()))
+
+
+def get_staff_by_login(db: Session, login: str) -> StaffUser | None:
+    return db.scalar(select(StaffUser).where(StaffUser.login == login.strip().lower()))
+
+
+def find_account(db: Session, login: str) -> StoreTenant | StaffUser | None:
+    """Avval do'kon egasi, so'ng sotuvchi hisobini qidiradi (loginlar umumiy noyob)."""
+    return get_store_by_login(db, login) or get_staff_by_login(db, login)
 
 
 def store_public(store: StoreTenant) -> dict:
@@ -246,10 +257,8 @@ def require_superadmin(
 # ---------------------------------------------------------------------------
 # Tenant (do'kon egasi) autentifikatsiyasi — har so'rovda holat qayta tekshiriladi
 # ---------------------------------------------------------------------------
-def current_store(
-    authorization: str | None = Header(default=None),
-    db: Session = Depends(get_db),
-) -> StoreTenant:
+def _principal(authorization: str | None, db: Session) -> tuple[StoreTenant, str, StaffUser | None]:
+    """Tokenni tekshiradi: do'kon holati, sessiya versiyasi, rol. Qaytaradi: (do'kon, rol, sotuvchi)."""
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Token talab qilinadi")
     token = authorization[7:].strip()
@@ -265,11 +274,46 @@ def current_store(
         raise HTTPException(status_code=403, detail="Do'kon hisobi Superadmin tomonidan vaqtincha bloklangan")
     if st == "EXPIRED":
         raise HTTPException(status_code=402, detail="Abonent to'lovi muddati tugagan")
+    role = data.get("role", "owner")  # eski tokenlarda rol yo'q: do'kon egasi
+    if role == "seller":
+        staff = db.scalar(select(StaffUser).where(StaffUser.id == data.get("uid"), StaffUser.store_id == store.id))
+        if not staff:
+            raise HTTPException(status_code=401, detail="Sotuvchi hisobi topilmadi")
+        if not staff.active:
+            raise HTTPException(status_code=403, detail="Sotuvchi hisobi do'kon egasi tomonidan o'chirilgan")
+        if int(data.get("tv", 0)) != (staff.token_version or 0):
+            raise HTTPException(status_code=401, detail="Sessiya bekor qilingan. Qayta kiring")
+        if staff.must_change_password:
+            raise HTTPException(status_code=403, detail="Avval bir martalik parolni almashtiring")
+        return store, "seller", staff
+    if role != "owner":
+        raise HTTPException(status_code=401, detail="Token yaroqsiz")
     if int(data.get("tv", 0)) != (store.token_version or 0):
         raise HTTPException(status_code=401, detail="Sessiya bekor qilingan. Qayta kiring")
     if store.must_change_password:
         raise HTTPException(status_code=403, detail="Avval bir martalik parolni almashtiring")
+    return store, "owner", None
+
+
+def current_store(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> StoreTenant:
+    """Do'kon egasi (to'liq huquq). Sotuvchi tokeni bilan egasi endpointlariga kirib bo'lmaydi."""
+    store, role, _ = _principal(authorization, db)
+    if role != "owner":
+        raise HTTPException(status_code=403, detail="Bu amal faqat do'kon egasi uchun")
     return store
+
+
+def current_seller(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> tuple[StoreTenant, StaffUser]:
+    store, role, staff = _principal(authorization, db)
+    if role != "seller" or staff is None:
+        raise HTTPException(status_code=403, detail="Bu bo'lim faqat sotuvchi hisobi uchun")
+    return store, staff
 
 
 @app.get("/health")
@@ -299,7 +343,7 @@ def list_audit_logs(limit: int = 100, db: Session = Depends(get_db)):
 @app.post("/api/superadmin/stores", dependencies=[Depends(require_superadmin)], status_code=201)
 def create_store_account(payload: CreateStoreRequest, db: Session = Depends(get_db)):
     login_key = payload.login.strip().lower()
-    if get_store_by_login(db, login_key):
+    if get_store_by_login(db, login_key) or get_staff_by_login(db, login_key):
         raise HTTPException(status_code=400, detail="Ushbu login band")
     otp_plain = generate_one_time_password()
     store = StoreTenant(
@@ -394,55 +438,73 @@ def _register_failure(db: Session, store: StoreTenant) -> None:
     db.commit()
 
 
-def _check_credentials(db: Session, login: str, password: str) -> StoreTenant:
-    """Login/parolni tekshiradi; xato urinishlarni hisoblaydi va vaqtinchalik bloklaydi."""
-    store = get_store_by_login(db, login)
-    if not store:
+def _check_credentials(db: Session, login: str, password: str) -> StoreTenant | StaffUser:
+    """Login/parolni tekshiradi (egasi yoki sotuvchi); xato urinishlarni hisoblaydi va vaqtinchalik bloklaydi."""
+    acct = find_account(db, login)
+    if not acct:
         pwd_hasher.verify(password, _DUMMY_HASH)  # timing tenglashtirish
         raise HTTPException(status_code=401, detail="Login yoki parol noto'g'ri")
-    if store.locked_until and _aware(store.locked_until) > utcnow():
+    if acct.locked_until and _aware(acct.locked_until) > utcnow():
         raise HTTPException(status_code=429, detail="Juda ko'p xato urinish. Birozdan keyin qayta urinib ko'ring")
-    if not pwd_hasher.verify(password, store.password_hash):
-        _register_failure(db, store)
+    if not pwd_hasher.verify(password, acct.password_hash):
+        _register_failure(db, acct)
         raise HTTPException(status_code=401, detail="Login yoki parol noto'g'ri")
-    if store.failed_logins or store.locked_until:
-        store.failed_logins = 0
-        store.locked_until = None
+    if acct.failed_logins or acct.locked_until:
+        acct.failed_logins = 0
+        acct.locked_until = None
         db.commit()
-    return store
+    return acct
 
 
-def issue_token(store: StoreTenant) -> str:
+def issue_token(acct: StoreTenant | StaffUser) -> str:
     now = utcnow()
-    return jwt.encode(
-        {"sub": store.login, "sid": store.id, "tv": store.token_version or 0, "iat": now, "exp": now + timedelta(hours=JWT_TTL_HOURS)},
-        JWT_SECRET,
-        algorithm="HS256",
-    )
+    claims = {"sub": acct.login, "tv": acct.token_version or 0, "iat": now, "exp": now + timedelta(hours=JWT_TTL_HOURS)}
+    if isinstance(acct, StaffUser):
+        claims.update({"sid": acct.store_id, "role": "seller", "uid": acct.id})
+    else:
+        claims.update({"sid": acct.id, "role": "owner"})
+    return jwt.encode(claims, JWT_SECRET, algorithm="HS256")
+
+
+def _store_for(db: Session, acct: StoreTenant | StaffUser) -> StoreTenant:
+    if isinstance(acct, StaffUser):
+        store = db.get(StoreTenant, acct.store_id)
+        if not store:
+            raise HTTPException(status_code=401, detail="Do'kon topilmadi")
+        return store
+    return acct
 
 
 @app.post("/api/auth/login")
 def store_owner_login(payload: StoreLoginRequest, db: Session = Depends(get_db)):
-    store = _check_credentials(db, payload.login, payload.password)
+    acct = _check_credentials(db, payload.login, payload.password)
+    store = _store_for(db, acct)
+    role = "seller" if isinstance(acct, StaffUser) else "owner"
     st = effective_status(store)
     if st == "BLOCKED":
         raise HTTPException(status_code=403, detail="Do'kon hisobi Superadmin tomonidan vaqtincha bloklangan")
     if st == "EXPIRED":
         raise HTTPException(status_code=402, detail="Abonent to'lovi muddati tugagan")
-    if store.must_change_password:
+    if role == "seller" and not acct.active:
+        raise HTTPException(status_code=403, detail="Sotuvchi hisobi do'kon egasi tomonidan o'chirilgan")
+    if acct.must_change_password:
         return {
             "status": "FORCE_PASSWORD_CHANGE_REQUIRED",
             "must_change_password": True,
+            "role": role,
             "message": "Bir martalik parol aniqlandi. Davom etish uchun yangi ishonchli parol o'rnating.",
         }
-    token = issue_token(store)
-    return {"status": "SUCCESS", "access_token": token, "token_type": "bearer", "must_change_password": False}
+    if role == "seller":
+        acct.last_login_at = utcnow()
+        db.commit()
+    token = issue_token(acct)
+    return {"status": "SUCCESS", "access_token": token, "token_type": "bearer", "must_change_password": False, "role": role}
 
 
 @app.post("/api/auth/change-initial-password")
 def force_change_initial_password(payload: ForcePasswordChangeRequest, db: Session = Depends(get_db)):
-    store = _check_credentials(db, payload.login, payload.one_time_password)
-    if not store.must_change_password:
+    acct = _check_credentials(db, payload.login, payload.one_time_password)
+    if not acct.must_change_password:
         raise HTTPException(status_code=400, detail="Bu hisobda bir martalik parol faol emas")
     if payload.new_strong_password == payload.one_time_password or not validate_strong_password(
         payload.new_strong_password
@@ -451,10 +513,11 @@ def force_change_initial_password(payload: ForcePasswordChangeRequest, db: Sessi
             status_code=400,
             detail="Yangi parol kamida 8 belgi, katta/kichik harf, raqam va maxsus belgidan iborat bo'lishi shart",
         )
-    store.password_hash = pwd_hasher.hash(payload.new_strong_password)
-    store.token_version = (store.token_version or 0) + 1
-    store.must_change_password = False
-    audit(db, store.login, "OTP_PASSWORD_CHANGED", f"'{store.name}' egasi parolni almashtirdi")
+    acct.password_hash = pwd_hasher.hash(payload.new_strong_password)
+    acct.token_version = (acct.token_version or 0) + 1
+    acct.must_change_password = False
+    who = "sotuvchi" if isinstance(acct, StaffUser) else f"'{acct.name}' egasi"
+    audit(db, acct.login, "OTP_PASSWORD_CHANGED", f"{who} parolni almashtirdi")
     db.commit()
     return {"status": "PASSWORD_UPDATED", "must_change_password": False}
 
@@ -531,6 +594,7 @@ def receipt_out(r: SaleReceipt) -> dict:
         "payment_method": r.payment_method, "total_uzs": r.total_uzs, "profit_uzs": r.profit_uzs,
         "created_at": r.created_at, "refunded": r.refunded_at is not None, "refunded_at": r.refunded_at,
         "refunded_uzs": r.refunded_uzs or 0, "original_total_uzs": r.total_uzs + (r.refunded_uzs or 0),
+        "seller_name": r.seller_name or "",
     }
 
 
@@ -874,14 +938,15 @@ def _new_receipt_code(db: Session, store_id: str) -> str:
     raise HTTPException(status_code=500, detail="Chek raqamini yaratib bo'lmadi")
 
 
-@app.post("/api/store/sales", status_code=201)
-def create_sale(
+def _make_sale(
+    db: Session,
+    store: StoreTenant,
     payload: SaleRequest,
     background: BackgroundTasks,
-    store: StoreTenant = Depends(current_store),
-    db: Session = Depends(get_db),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=64),
-):
+    idempotency_key: str | None,
+    staff: StaffUser | None = None,
+) -> SaleReceipt:
+    """Sotuvning umumiy mantig'i (egasi ham, sotuvchi ham): narx serverda hisoblanadi, ombor bloklanadi."""
     # Bir xil SKU takrorlansa birlashtiriladi; deadlock oldini olish uchun tartiblanadi
     qty_by_sku: dict[str, int] = {}
     for it in payload.items:
@@ -898,7 +963,7 @@ def create_sale(
     if idem:  # tovarlar bloklangandan keyin tekshiriladi: parallel takroriy so'rov birinchisini kutadi
         prev = db.scalar(select(SaleReceipt).where(SaleReceipt.store_id == store.id, SaleReceipt.idem_key == idem))
         if prev:
-            return receipt_out(prev)
+            return prev
     missing = [s for s in qty_by_sku if s not in by_sku]
     if missing:
         raise HTTPException(status_code=404, detail=f"Tovar topilmadi: {', '.join(missing)}")
@@ -947,6 +1012,8 @@ def create_sale(
         payment_method=payload.payment_method,
         total_uzs=total,
         profit_uzs=profit,
+        staff_id=staff.id if staff else None,
+        seller_name=staff.full_name if staff else "",
     )
     db.add(receipt)
     db.flush()  # receipt.id kerak
@@ -958,7 +1025,7 @@ def create_sale(
         db.rollback()
         prev = db.scalar(select(SaleReceipt).where(SaleReceipt.store_id == store.id, SaleReceipt.idem_key == idem)) if idem else None
         if prev:
-            return receipt_out(prev)
+            return prev
         raise HTTPException(status_code=409, detail="Sotuvni saqlashda to'qnashuv. Qayta urinib ko'ring")
 
     # Omborga xabar: sotuv javobini kechiktirmaslik uchun fon vazifasi
@@ -966,11 +1033,23 @@ def create_sale(
         "receipt_code": receipt.receipt_code,
         "time": datetime.now(tg.TZ).strftime("%H:%M"),
         "customer": receipt.customer_name,
+        "seller": receipt.seller_name,
         "payment_method": receipt.payment_method,
         "total": total,
         "lines": [{"name": p.name, "qty": qty, "stock_left": p.stock_qty} for p, qty in sold],
     })
-    return receipt_out(receipt)
+    return receipt
+
+
+@app.post("/api/store/sales", status_code=201)
+def create_sale(
+    payload: SaleRequest,
+    background: BackgroundTasks,
+    store: StoreTenant = Depends(current_store),
+    db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=64),
+):
+    return receipt_out(_make_sale(db, store, payload, background, idempotency_key))
 
 
 @app.get("/api/store/sales")
@@ -1158,6 +1237,234 @@ def dashboard(store: StoreTenant = Depends(current_store), db: Session = Depends
         "customer_count": int(customer_count),
         "low_stock": [product_out(p) for p in low_products],
     }
+
+
+# ---------------------------------------------------------------------------
+# Sotuvchi (kassir) paneli: faqat sotuv. Tannarx, foyda, mijoz telefonlari/qarzlari, xodimlar va
+# hisobotlar bu yerda YO'Q. Egasi endpointlari sotuvchi tokeni bilan 403 qaytaradi.
+# ---------------------------------------------------------------------------
+SELLER_MAX_DISCOUNT_PCT = 10
+MAX_STAFF_PER_STORE = 20
+
+
+def seller_product_out(p: Product) -> dict:
+    return {"sku": p.sku, "name": p.name, "category": p.category, "price_uzs": p.price_uzs, "stock_qty": p.stock_qty}
+
+
+def seller_receipt_out(r: SaleReceipt) -> dict:
+    return {
+        "receipt_code": r.receipt_code, "customer_name": r.customer_name, "items": r.items_summary,
+        "payment_method": r.payment_method, "total_uzs": r.total_uzs, "created_at": r.created_at,
+        "refunded": r.refunded_at is not None, "seller_name": r.seller_name or "",
+    }
+
+
+@app.get("/api/seller/me")
+def seller_me(ctx: tuple[StoreTenant, StaffUser] = Depends(current_seller)):
+    store, staff = ctx
+    return {"full_name": staff.full_name, "login": staff.login, "role": "seller", "store_name": store.name}
+
+
+@app.get("/api/seller/products")
+def seller_products(
+    q: str | None = None, limit: int = 2000, offset: int = 0,
+    ctx: tuple[StoreTenant, StaffUser] = Depends(current_seller), db: Session = Depends(get_db),
+):
+    store, _ = ctx
+    stmt = select(Product).where(Product.store_id == store.id)
+    if q and q.strip():
+        like = f"%{q.strip().lower()}%"
+        stmt = stmt.where(or_(func.lower(Product.name).like(like), func.lower(Product.sku).like(like)))
+    rows = db.scalars(stmt.order_by(Product.name, Product.id).limit(max(1, min(limit, 5000))).offset(max(0, offset))).all()
+    return [seller_product_out(p) for p in rows]
+
+
+@app.get("/api/seller/customers")
+def seller_find_customers(
+    q: str = "", ctx: tuple[StoreTenant, StaffUser] = Depends(current_seller), db: Session = Depends(get_db),
+):
+    """Mijozlar ro'yxati sotuvchiga ochilmaydi: faqat qidiruv (kamida 2 belgi), ko'pi bilan 20 ta, faqat ism."""
+    store, _ = ctx
+    q = q.strip().lower()
+    if len(q) < 2:
+        return []
+    like = f"%{q}%"
+    rows = db.scalars(
+        select(Customer)
+        .where(Customer.store_id == store.id, or_(func.lower(Customer.full_name).like(like), Customer.phone.like(like)))
+        .order_by(Customer.full_name, Customer.id)
+        .limit(20)
+    ).all()
+    return [{"id": c.id, "full_name": c.full_name, "phone_hint": c.phone[-4:]} for c in rows]
+
+
+@app.post("/api/seller/customers", status_code=201)
+def seller_create_customer(
+    payload: CustomerIn, ctx: tuple[StoreTenant, StaffUser] = Depends(current_seller), db: Session = Depends(get_db)
+):
+    store, staff = ctx
+    c = Customer(store_id=store.id, full_name=payload.full_name.strip(), phone=payload.phone.strip())
+    db.add(c)
+    audit(db, staff.login, "SELLER_ADD_CUSTOMER", f"{c.full_name}")
+    db.commit()
+    return {"id": c.id, "full_name": c.full_name, "phone_hint": c.phone[-4:]}
+
+
+@app.post("/api/seller/sales", status_code=201)
+def seller_create_sale(
+    payload: SaleRequest,
+    background: BackgroundTasks,
+    ctx: tuple[StoreTenant, StaffUser] = Depends(current_seller),
+    db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=64),
+):
+    store, staff = ctx
+    if payload.discount_pct > SELLER_MAX_DISCOUNT_PCT:
+        raise HTTPException(status_code=400, detail=f"Sotuvchi ko'pi bilan {SELLER_MAX_DISCOUNT_PCT}% chegirma bera oladi")
+    return seller_receipt_out(_make_sale(db, store, payload, background, idempotency_key, staff))
+
+
+@app.get("/api/seller/sales")
+def seller_sales(
+    limit: int = 100, offset: int = 0,
+    ctx: tuple[StoreTenant, StaffUser] = Depends(current_seller), db: Session = Depends(get_db),
+):
+    """Sotuvchi faqat o'z cheklarini ko'radi (foydasiz)."""
+    store, staff = ctx
+    rows = db.scalars(
+        select(SaleReceipt)
+        .where(SaleReceipt.store_id == store.id, SaleReceipt.staff_id == staff.id)
+        .order_by(SaleReceipt.id.desc())
+        .limit(max(1, min(limit, 300)))
+        .offset(max(0, offset))
+    ).all()
+    return [seller_receipt_out(r) for r in rows]
+
+
+@app.post("/api/seller/change-password")
+def seller_change_password(
+    payload: ChangePasswordRequest, ctx: tuple[StoreTenant, StaffUser] = Depends(current_seller), db: Session = Depends(get_db)
+):
+    _, staff = ctx
+    if not pwd_hasher.verify(payload.current_password, staff.password_hash):
+        _register_failure(db, staff)
+        raise HTTPException(status_code=400, detail="Joriy parol noto'g'ri")
+    if payload.new_password == payload.current_password or not validate_strong_password(payload.new_password):
+        raise HTTPException(
+            status_code=400,
+            detail="Yangi parol joriyidan farq qilishi va kamida 8 belgi, katta/kichik harf, raqam va maxsus belgidan iborat bo'lishi shart",
+        )
+    staff.password_hash = pwd_hasher.hash(payload.new_password)
+    staff.token_version = (staff.token_version or 0) + 1
+    audit(db, staff.login, "PASSWORD_CHANGED", "sotuvchi parolni almashtirdi")
+    db.commit()
+    return {"status": "PASSWORD_UPDATED", "access_token": issue_token(staff), "token_type": "bearer"}
+
+
+@app.post("/api/seller/logout")
+def seller_logout(ctx: tuple[StoreTenant, StaffUser] = Depends(current_seller), db: Session = Depends(get_db)):
+    _, staff = ctx
+    staff.token_version = (staff.token_version or 0) + 1
+    db.commit()
+    return {"status": "LOGGED_OUT"}
+
+
+# ---------------------------------------------------------------------------
+# Do'kon egasi: sotuvchilarni boshqarish
+# ---------------------------------------------------------------------------
+class StaffCreate(BaseModel):
+    full_name: str = Field(min_length=2, max_length=120)
+    login: str = Field(pattern=r"^[A-Za-z0-9_.-]{3,64}$")
+
+
+class StaffActive(BaseModel):
+    active: bool
+
+
+def staff_out(st: StaffUser, today: dict | None = None) -> dict:
+    t = (today or {}).get(st.id, (0, 0))
+    return {
+        "id": st.id, "full_name": st.full_name, "login": st.login, "active": st.active,
+        "must_change_password": st.must_change_password, "created_at": st.created_at,
+        "last_login_at": st.last_login_at, "today_count": int(t[0]), "today_total_uzs": int(t[1]),
+    }
+
+
+def _staff_for(db: Session, store: StoreTenant, staff_id: int) -> StaffUser:
+    st = db.scalar(select(StaffUser).where(StaffUser.id == staff_id, StaffUser.store_id == store.id).with_for_update())
+    if not st:
+        raise HTTPException(status_code=404, detail="Sotuvchi topilmadi")
+    return st
+
+
+@app.get("/api/store/staff")
+def list_staff(store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    rows = db.scalars(select(StaffUser).where(StaffUser.store_id == store.id).order_by(StaffUser.full_name, StaffUser.id)).all()
+    start = datetime.combine(tg.today_local(), datetime.min.time(), tzinfo=tg.TZ).astimezone(timezone.utc)
+    agg = db.execute(
+        select(SaleReceipt.staff_id, func.count(SaleReceipt.id), func.coalesce(func.sum(SaleReceipt.total_uzs), 0))
+        .where(SaleReceipt.store_id == store.id, SaleReceipt.staff_id.is_not(None), SaleReceipt.created_at >= start,
+               SaleReceipt.refunded_at.is_(None))
+        .group_by(SaleReceipt.staff_id)
+    ).all()
+    today = {a[0]: (a[1], a[2]) for a in agg}
+    return [staff_out(st, today) for st in rows]
+
+
+@app.post("/api/store/staff", status_code=201)
+def create_staff(payload: StaffCreate, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    count = db.scalar(select(func.count(StaffUser.id)).where(StaffUser.store_id == store.id)) or 0
+    if count >= MAX_STAFF_PER_STORE:
+        raise HTTPException(status_code=400, detail=f"Bitta do'konda ko'pi bilan {MAX_STAFF_PER_STORE} ta sotuvchi bo'lishi mumkin")
+    login_key = payload.login.strip().lower()
+    if find_account(db, login_key):
+        raise HTTPException(status_code=409, detail="Ushbu login band. Boshqa login tanlang")
+    otp = generate_one_time_password()
+    st = StaffUser(store_id=store.id, login=login_key, full_name=payload.full_name.strip(), password_hash=pwd_hasher.hash(otp))
+    db.add(st)
+    audit(db, store.login, "CREATE_SELLER", f"{st.full_name} ({login_key})")
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Ushbu login band. Boshqa login tanlang")
+    return {**staff_out(st), "one_time_password": otp, "panel_path": "seller.html"}
+
+
+@app.post("/api/store/staff/{staff_id}/reset-password")
+def reset_staff_password(staff_id: int, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    st = _staff_for(db, store, staff_id)
+    otp = generate_one_time_password()
+    st.password_hash = pwd_hasher.hash(otp)
+    st.must_change_password = True
+    st.token_version = (st.token_version or 0) + 1
+    st.failed_logins = 0
+    st.locked_until = None
+    audit(db, store.login, "RESET_SELLER_PASSWORD", f"{st.full_name} ({st.login})")
+    db.commit()
+    return {**staff_out(st), "one_time_password": otp, "panel_path": "seller.html"}
+
+
+@app.patch("/api/store/staff/{staff_id}")
+def set_staff_active(
+    staff_id: int, payload: StaffActive, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)
+):
+    st = _staff_for(db, store, staff_id)
+    st.active = payload.active
+    if not payload.active:
+        st.token_version = (st.token_version or 0) + 1  # ochiq sessiyalar darhol yopiladi
+    audit(db, store.login, "SELLER_ACTIVE" if payload.active else "SELLER_BLOCKED", f"{st.full_name} ({st.login})")
+    db.commit()
+    return staff_out(st)
+
+
+@app.delete("/api/store/staff/{staff_id}")
+def delete_staff(staff_id: int, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    st = _staff_for(db, store, staff_id)
+    audit(db, store.login, "DELETE_SELLER", f"{st.full_name} ({st.login})")
+    db.delete(st)  # eski cheklarda sotuvchi nomi saqlanib qoladi
+    db.commit()
+    return {"deleted": True}
 
 
 # ---------------------------------------------------------------------------

@@ -107,6 +107,26 @@ class Employee(Base):
     store: Mapped["StoreTenant"] = relationship(back_populates="employees")
 
 
+class StaffUser(Base):
+    """Do'kon sotuvchisi (kassir): faqat sotuv paneliga kira oladi, foyda/mijoz/xodim ma'lumotini ko'rmaydi."""
+
+    __tablename__ = "staff_users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    store_id: Mapped[str] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True, nullable=False)
+    login: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)  # do'kon loginlari bilan ham takrorlanmaydi
+    full_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(16), default="seller", nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    failed_logins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class EmployeeAdvance(Base):
     """Xodimga berilgan avans yozuvi (kimga, qancha, qachon). Manfiy summa: tuzatish."""
 
@@ -141,6 +161,8 @@ class SaleReceipt(Base):
     refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # to'liq qaytarilgan chek
     refunded_uzs: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0", nullable=False)  # jami qaytarilgan summa
     idem_key: Mapped[str | None] = mapped_column(String(64), nullable=True)  # takroriy yuborishdan himoya
+    staff_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # sotuvchi (None: do'kon egasi)
+    seller_name: Mapped[str] = mapped_column(String(120), default="", server_default="", nullable=False)
 
     store: Mapped["StoreTenant"] = relationship(back_populates="receipts")
 

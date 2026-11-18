@@ -179,7 +179,9 @@ def sale_message(store_name: str, data: dict) -> str:
     return (
         f"🛒 <b>Yangi sotuv</b> — {_e(store_name)}\n"
         f"Chek: <code>{_e(data['receipt_code'])}</code> • {_e(data['time'])}\n"
-        f"Mijoz: {_e(data['customer'])}\n\n"
+        f"Mijoz: {_e(data['customer'])}\n"
+        + (f"Sotuvchi: {_e(data['seller'])}\n" if data.get("seller") else "")
+        + "\n"
         + "\n".join(lines)
         + f"\n\nJami: <b>{uzs(data['total'])}</b> • To'lov: {_e(data['payment_method'])}"
     )
