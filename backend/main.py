@@ -67,6 +67,7 @@ _MIGRATIONS = [
     "ALTER TABLE stores ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS staff_id INTEGER",
     "ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS seller_name VARCHAR(120) NOT NULL DEFAULT ''",
+    "ALTER TABLE employees ADD COLUMN IF NOT EXISTS position VARCHAR(80) NOT NULL DEFAULT ''",
     "ALTER TABLE customers DROP COLUMN IF EXISTS cashback_uzs",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_code ON sale_receipts (store_id, receipt_code)",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_idem ON sale_receipts (store_id, idem_key)",
@@ -582,6 +583,7 @@ def employee_out(e: Employee) -> dict:
         "first_name": e.first_name,
         "last_name": e.last_name,
         "phone": e.phone,
+        "position": e.position or "",
         "salary_uzs": e.salary_uzs,
         "advance_uzs": e.advance_uzs,
         "payable_uzs": e.salary_uzs - e.advance_uzs,
@@ -784,6 +786,7 @@ class EmployeeIn(BaseModel):
     first_name: str = Field(min_length=2, max_length=80)
     last_name: str = Field(min_length=2, max_length=80)
     phone: str = Field(min_length=7, max_length=32)
+    position: str = Field(default="", max_length=80)
     salary_uzs: int = Field(default=0, ge=0, le=10**12)
     advance_uzs: int = Field(default=0, ge=0, le=10**12)
 
@@ -792,6 +795,7 @@ class EmployeeUpdate(BaseModel):
     first_name: str | None = Field(default=None, min_length=2, max_length=80)
     last_name: str | None = Field(default=None, min_length=2, max_length=80)
     phone: str | None = Field(default=None, min_length=7, max_length=32)
+    position: str | None = Field(default=None, max_length=80)
     salary_uzs: int | None = Field(default=None, ge=0, le=10**12)
     advance_uzs: int | None = Field(default=None, ge=0, le=10**12)
 
@@ -807,6 +811,7 @@ def list_employees(
         stmt = stmt.where(or_(
             func.lower(Employee.first_name).like(like),
             func.lower(Employee.last_name).like(like),
+            func.lower(Employee.position).like(like),
             Employee.phone.like(like),
         ))
     rows = db.scalars(stmt.order_by(Employee.last_name, Employee.first_name, Employee.id).limit(max(1, min(limit, 5000))).offset(max(0, offset))).all()
@@ -820,6 +825,7 @@ def create_employee(payload: EmployeeIn, store: StoreTenant = Depends(current_st
         first_name=payload.first_name.strip(),
         last_name=payload.last_name.strip(),
         phone=payload.phone.strip(),
+        position=payload.position.strip(),
         salary_uzs=payload.salary_uzs,
         advance_uzs=payload.advance_uzs,
     )
@@ -848,6 +854,8 @@ def update_employee(
         e.last_name = data["last_name"].strip()
     if "phone" in data:
         e.phone = data["phone"].strip()
+    if data.get("position") is not None:
+        e.position = data["position"].strip()
     if len(e.first_name) < 2 or len(e.last_name) < 2 or len(e.phone) < 7:
         raise HTTPException(status_code=400, detail="Ism, familiya va telefon to'liq kiriting")
     if data.get("salary_uzs") is not None:

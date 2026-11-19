@@ -101,6 +101,7 @@ class Employee(Base):
     first_name: Mapped[str] = mapped_column(String(80), nullable=False)
     last_name: Mapped[str] = mapped_column(String(80), nullable=False)
     phone: Mapped[str] = mapped_column(String(32), nullable=False)
+    position: Mapped[str] = mapped_column(String(80), default="", nullable=False)
     salary_uzs: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     advance_uzs: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
 

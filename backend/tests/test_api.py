@@ -364,7 +364,10 @@ def test_employees_salary_and_advance():
             "salary_uzs": 3000000, "advance_uzs": 500000})
         assert r.status_code == 201, r.text
         emp = r.json()
-        assert emp["payable_uzs"] == 2500000
+        assert emp["payable_uzs"] == 2500000 and emp["position"] == ""
+        pu = c.patch(f"/api/store/employees/{emp['id']}", headers=H, json={"position": " Omborchi "})
+        assert pu.status_code == 200 and pu.json()["position"] == "Omborchi"
+        assert len(c.get("/api/store/employees?q=ombor", headers=H).json()) == 1
         assert c.get("/api/store/employees", headers=other).json() == []
         assert c.patch(f"/api/store/employees/{emp['id']}", headers=other, json={"salary_uzs": 1}).status_code == 404
         updated = c.patch(f"/api/store/employees/{emp['id']}", headers=H, json={
