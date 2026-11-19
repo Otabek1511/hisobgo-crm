@@ -694,6 +694,27 @@ def list_stock_entries(sku: str, store: StoreTenant = Depends(current_store), db
     return [{"qty": r.qty, "created_at": r.created_at} for r in rows]
 
 
+@app.get("/api/store/stock-entries")
+def stock_journal(
+    q: str | None = None, limit: int = 100, offset: int = 0,
+    store: StoreTenant = Depends(current_store), db: Session = Depends(get_db),
+):
+    """Barcha tovarlar bo'yicha kirim jurnali (yangi yozuvlar birinchi)."""
+    stmt = (
+        select(StockEntry, Product.sku, Product.name)
+        .join(Product, Product.id == StockEntry.product_id)
+        .where(StockEntry.store_id == store.id)
+    )
+    if q and q.strip():
+        like = f"%{q.strip().lower()}%"
+        stmt = stmt.where(or_(func.lower(Product.name).like(like), func.lower(Product.sku).like(like)))
+    rows = db.execute(
+        stmt.order_by(StockEntry.created_at.desc(), StockEntry.id.desc())
+        .limit(max(1, min(limit, 300))).offset(max(0, offset))
+    ).all()
+    return [{"sku": sku, "name": name, "qty": e.qty, "created_at": e.created_at} for e, sku, name in rows]
+
+
 @app.delete("/api/store/products/{sku}")
 def delete_product(sku: str, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
     p = db.scalar(select(Product).where(Product.store_id == store.id, Product.sku == sku).with_for_update())

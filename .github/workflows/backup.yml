@@ -1,0 +1,60 @@
+name: Zaxira nusxa (har kuni 02:00 Toshkent)
+
+on:
+  schedule:
+    - cron: "0 21 * * *"   # 21:00 UTC = 02:00 Toshkent
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Maxfiy kalitlar borligini tekshirish
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          [ -n "$DATABASE_URL" ] || { echo "::error::GitHub Secrets ichida DATABASE_URL yo'q"; exit 1; }
+          [ "${#BACKUP_PASSPHRASE}" -ge 16 ] || { echo "::error::BACKUP_PASSPHRASE yo'q yoki 16 belgidan qisqa"; exit 1; }
+
+      - name: PostgreSQL 17 klientini o'rnatish
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Bazadan nusxa olish va tekshirish
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          # SQLAlchemy uslubidagi "postgresql+psycopg://" ni oddiy URL ga aylantirish
+          URL="${DATABASE_URL/postgresql+psycopg:/postgresql:}"
+          pg_dump --format=custom --no-owner --no-privileges --file=hisobgo.dump "$URL"
+          pg_restore --list hisobgo.dump > toc.txt
+          for t in stores products sale_receipts customers; do
+            grep -q "TABLE DATA public $t " toc.txt || { echo "::error::$t jadvali nusxada yo'q"; exit 1; }
+          done
+          ls -l hisobgo.dump
+
+      - name: Shifrlash (jamoat repozitoriyda ma'lumot ochiq qolmasligi uchun)
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" \
+              --symmetric --cipher-algo AES256 -o "hisobgo-$(date -u +%F).dump.gpg" hisobgo.dump
+          # shifrlangan faylni qaytarib ochib tekshirish
+          gpg --batch --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" -d hisobgo-*.dump.gpg | pg_restore --list > /dev/null
+          rm -f hisobgo.dump toc.txt
+
+      - name: Saqlash (30 kun)
+        uses: actions/upload-artifact@v4
+        with:
+          name: hisobgo-backup
+          path: hisobgo-*.dump.gpg
+          retention-days: 30
+          if-no-files-found: error

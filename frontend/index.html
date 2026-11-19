@@ -310,6 +310,7 @@
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <input id="invSearchInput" type="text" placeholder="Tovar yoki SKU qidirish..." class="px-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <button id="btnJournal" type="button" class="px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold">Kirim jurnali</button>
           <button id="btnExportProducts" type="button" class="px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold">Excel (CSV)</button>
           <button id="btnOpenAddProduct" type="button" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-sm transition">+ Yangi tovar</button>
         </div>
@@ -610,6 +611,21 @@
         <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Avans tarixi</h4>
         <div id="advHistory" class="space-y-1.5 max-h-72 overflow-auto"></div>
       </div>
+    </div>
+  </div>
+
+  <div id="modalJournal" class="hidden fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div>
+          <h3 class="font-bold text-lg text-slate-900">Kirim jurnali</h3>
+          <p class="text-xs text-slate-500 mt-0.5">Omborga qaysi tovar, qancha va qachon kirgani</p>
+        </div>
+        <button type="button" data-close="modalJournal" class="text-slate-400 hover:text-slate-700 font-bold" aria-label="Yopish">✕</button>
+      </div>
+      <input id="journalSearch" type="search" placeholder="Tovar nomi yoki SKU…" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+      <div id="journalRows" class="space-y-2 max-h-96 overflow-y-auto custom-scroll"></div>
+      <button id="journalMore" type="button" class="hidden w-full py-2 rounded-xl border border-slate-300 text-xs font-semibold">Yana yuklash</button>
     </div>
   </div>
 
@@ -1304,6 +1320,27 @@
     }
 
     // ----- Hodisalar -----
+    var JR = { q: "", rows: [], more: false, t: null };
+    function renderJournal() {
+      $("journalRows").innerHTML = JR.rows.length ? JR.rows.map(function (r) {
+        return '<div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200"><div class="min-w-0"><div class="text-sm font-bold text-slate-900 truncate">' + esc(r.name) + '</div><div class="text-[11px] font-mono-code text-slate-500">' + esc(r.sku) + '</div></div><div class="text-right shrink-0"><div class="text-sm font-bold text-emerald-700">+' + esc(r.qty) + ' dona</div><div class="text-[11px] font-mono-code text-slate-500">' + esc(fmtEntry(r.created_at)) + "</div></div></div>";
+      }).join("") : '<div class="text-xs text-slate-400 py-4 text-center">Kirim yozuvlari topilmadi.</div>';
+      $("journalMore").classList.toggle("hidden", !JR.more);
+    }
+    function loadJournal(append) {
+      var off = append ? JR.rows.length : 0;
+      return storeApi("GET", "/api/store/stock-entries?limit=" + PAGE + "&offset=" + off + "&q=" + encodeURIComponent(JR.q)).then(function (rows) {
+        JR.rows = append ? JR.rows.concat(rows) : rows;
+        JR.more = rows.length === PAGE;
+        renderJournal();
+      });
+    }
+    function openJournal() {
+      JR.q = ""; $("journalSearch").value = ""; JR.rows = []; JR.more = false;
+      $("journalRows").innerHTML = '<div class="text-xs text-slate-400 py-3">Yuklanmoqda…</div>';
+      modal("modalJournal", true);
+      loadJournal(false).catch(function (e) { modal("modalJournal", false); fail(e); });
+    }
     function openStock(sku) {
       var p = S.products.filter(function (x) { return x.sku === sku; })[0];
       $("stockTitle").textContent = p ? p.name : sku;
@@ -1358,6 +1395,12 @@
         b.addEventListener("click", function () { modal(b.getAttribute("data-close"), false); });
       });
       initStaff();
+      $("btnJournal").addEventListener("click", openJournal);
+      $("journalMore").addEventListener("click", function () { loadJournal(true).catch(fail); });
+      $("journalSearch").addEventListener("input", function () {
+        clearTimeout(JR.t);
+        JR.t = setTimeout(function () { JR.q = $("journalSearch").value.trim(); loadJournal(false).catch(fail); }, 300);
+      });
       $("btnQuickPosHeader").addEventListener("click", function () { switchTab("pos"); });
       $("btnDashToInventory").addEventListener("click", function () { switchTab("inventory"); });
 

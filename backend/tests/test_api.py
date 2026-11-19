@@ -402,5 +402,12 @@ def test_employees_salary_and_advance():
         assert ps["paid_uzs"] == 0 and ps["advance_uzs"] == 500000
         assert c.delete(f"/api/store/employees/{emp['id']}", headers=H).status_code == 200
         assert c.delete(f"/api/store/employees/{emp['id']}", headers=H).status_code == 404
+        # umumiy kirim jurnali
+        _product(c, H, "J-1", stock=7)
+        c.post("/api/store/products/J-1/restock", headers=H, json={"qty": 3})
+        jr = c.get("/api/store/stock-entries", headers=H).json()
+        assert [x["qty"] for x in jr[:2]] == [3, 7] and jr[0]["sku"] == "J-1"
+        assert c.get("/api/store/stock-entries?q=zzzz", headers=H).json() == []
+        assert c.get("/api/store/stock-entries", headers=other).json() == []
         c.delete("/api/superadmin/stores/emp1", headers=SA)
         c.delete("/api/superadmin/stores/emp2", headers=SA)
