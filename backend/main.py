@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from db import engine, get_db
 import telegram_bot as tg
 from models import (
-    Base, Customer, Employee, EmployeeAdvance, Product, SaleItem, SaleReceipt,
+    Base, Customer, Employee, EmployeeAdvance, Expense, Product, SaleItem, SaleReceipt,
     SecurityAuditLog, StaffUser, StockEntry, StoreTenant, TelegramLink,
 )
 
@@ -1224,6 +1224,72 @@ def refund_sale(
     return {**_receipt_detail(db, r), "stock_restored": stock_ok, "had_items": bool(items), "refund_uzs": amt}
 
 
+EXPENSE_CATEGORIES = ["Ijara", "Elektr/suv/gaz", "Transport", "Oylik", "Reklama", "Soliq", "Ta'mirlash", "Boshqa"]
+
+
+class ExpenseIn(BaseModel):
+    amount_uzs: int = Field(gt=0, le=10**12)
+    category: str = Field(default="Boshqa", max_length=40)
+    note: str = Field(default="", max_length=200)
+    spent_on: date | None = None
+
+
+def _expense_out(x: Expense) -> dict:
+    return {"id": x.id, "amount_uzs": x.amount_uzs, "category": x.category, "note": x.note, "spent_on": x.spent_on.isoformat()}
+
+
+@app.get("/api/store/expenses")
+def list_expenses(month: str | None = None, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    """Oy bo'yicha xarajatlar (month=YYYY-MM, bo'sh bo'lsa joriy oy) + toifalar kesimida jami."""
+    today = datetime.now(tg.TZ).date()
+    try:
+        y, m = (int(v) for v in month.split("-")) if month else (today.year, today.month)
+        start = date(y, m, 1)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Oy formati noto'g'ri (YYYY-MM)")
+    end = date(start.year + (start.month == 12), start.month % 12 + 1, 1)
+    rows = db.scalars(
+        select(Expense).where(Expense.store_id == store.id, Expense.spent_on >= start, Expense.spent_on < end)
+        .order_by(Expense.spent_on.desc(), Expense.id.desc()).limit(1000)
+    ).all()
+    by_cat: dict[str, int] = {}
+    for x in rows:
+        by_cat[x.category] = by_cat.get(x.category, 0) + x.amount_uzs
+    return {
+        "month": start.strftime("%Y-%m"), "total_uzs": sum(by_cat.values()), "by_category": by_cat,
+        "categories": EXPENSE_CATEGORIES, "items": [_expense_out(x) for x in rows],
+    }
+
+
+@app.post("/api/store/expenses", status_code=201)
+def create_expense(payload: ExpenseIn, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    today = datetime.now(tg.TZ).date()
+    day = payload.spent_on or today
+    if day > today:
+        raise HTTPException(status_code=400, detail="Kelajak sanasiga xarajat yozib bo'lmaydi")
+    if day < today - timedelta(days=366):
+        raise HTTPException(status_code=400, detail="Sana juda eski")
+    x = Expense(
+        store_id=store.id, amount_uzs=payload.amount_uzs, spent_on=day,
+        category=payload.category.strip() or "Boshqa", note=payload.note.strip(),
+    )
+    db.add(x)
+    audit(db, store.login, "ADD_EXPENSE", f"{x.category}: {x.amount_uzs} so'm")
+    db.commit()
+    return _expense_out(x)
+
+
+@app.delete("/api/store/expenses/{expense_id}")
+def delete_expense(expense_id: int, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    x = db.scalar(select(Expense).where(Expense.id == expense_id, Expense.store_id == store.id))
+    if not x:
+        raise HTTPException(status_code=404, detail="Xarajat topilmadi")
+    audit(db, store.login, "DELETE_EXPENSE", f"{x.category}: {x.amount_uzs} so'm")
+    db.delete(x)
+    db.commit()
+    return {"deleted": True}
+
+
 @app.get("/api/store/dashboard")
 def dashboard(store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
     inv_value, sku_count = db.execute(
@@ -1259,6 +1325,10 @@ def dashboard(store: StoreTenant = Depends(current_store), db: Session = Depends
     week_revenue = sum(x["revenue_uzs"] for x in weekly)
     week_profit = sum(x["profit_uzs"] for x in weekly)
     prev_week_revenue = sum(per_day.get(today - timedelta(days=k), [0, 0])[0] for k in range(7, 14))
+    week_expenses = int(db.scalar(
+        select(func.coalesce(func.sum(Expense.amount_uzs), 0))
+        .where(Expense.store_id == store.id, Expense.spent_on >= today - timedelta(days=6), Expense.spent_on <= today)
+    ) or 0)
 
     # Jami to'lov turlari bo'yicha (butun tarix)
     by_method: dict[str, int] = {}
@@ -1272,6 +1342,8 @@ def dashboard(store: StoreTenant = Depends(current_store), db: Session = Depends
     return {
         "week_revenue_uzs": week_revenue,
         "week_profit_uzs": week_profit,
+        "week_expenses_uzs": week_expenses,
+        "week_net_profit_uzs": week_profit - week_expenses,
         "prev_week_revenue_uzs": prev_week_revenue,
         "margin_pct": round(week_profit * 100 / week_revenue, 1) if week_revenue else 0,
         "weekly": weekly,

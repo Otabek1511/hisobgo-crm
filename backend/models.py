@@ -142,6 +142,20 @@ class EmployeeAdvance(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class Expense(Base):
+    """Do'kon xarajati (ijara, svet, transport...)."""
+
+    __tablename__ = "expenses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    store_id: Mapped[str] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True, nullable=False)
+    amount_uzs: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    category: Mapped[str] = mapped_column(String(40), default="Boshqa", nullable=False)
+    note: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    spent_on: Mapped[date] = mapped_column(Date, index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class SaleReceipt(Base):
     __tablename__ = "sale_receipts"
     __table_args__ = (

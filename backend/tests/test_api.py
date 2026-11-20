@@ -351,6 +351,27 @@ def test_stock_entries_keep_time_and_qty():
         c.delete("/api/superadmin/stores/stk2", headers=SA)
 
 
+def test_expenses_and_net_profit():
+    with TestClient(app) as c:
+        H = _login_store(c, "exp1")
+        other = _login_store(c, "exp2")
+        assert c.post("/api/store/expenses", headers=H, json={"amount_uzs": 0}).status_code == 422
+        assert c.post("/api/store/expenses", headers=H, json={"amount_uzs": 5, "spent_on": "2099-01-01"}).status_code == 400
+        r = c.post("/api/store/expenses", headers=H, json={"amount_uzs": 300000, "category": "Ijara", "note": "Noyabr"})
+        assert r.status_code == 201, r.text
+        c.post("/api/store/expenses", headers=H, json={"amount_uzs": 50000, "category": "Transport"})
+        lst = c.get("/api/store/expenses", headers=H).json()
+        assert lst["total_uzs"] == 350000 and lst["by_category"]["Ijara"] == 300000 and len(lst["items"]) == 2
+        assert c.get("/api/store/expenses?month=xx", headers=H).status_code == 400
+        assert c.get("/api/store/expenses", headers=other).json()["items"] == []
+        d = c.get("/api/store/dashboard", headers=H).json()
+        assert d["week_expenses_uzs"] == 350000 and d["week_net_profit_uzs"] == d["week_profit_uzs"] - 350000
+        assert c.delete(f"/api/store/expenses/{r.json()['id']}", headers=other).status_code == 404
+        assert c.delete(f"/api/store/expenses/{r.json()['id']}", headers=H).status_code == 200
+        c.delete("/api/superadmin/stores/exp1", headers=SA)
+        c.delete("/api/superadmin/stores/exp2", headers=SA)
+
+
 def test_employees_salary_and_advance():
     with TestClient(app) as c:
         H = _login_store(c, "emp1")
