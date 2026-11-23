@@ -5,7 +5,7 @@ Har kuni 02:00 (Toshkent) GitHub Actions `backup.yml` bazadan to'liq nusxa oladi
 
 ## Bir martalik sozlash (Settings → Secrets and variables → Actions)
 - `DATABASE_URL` — Neon ulanish manzili (Render'dagi `DATABASE_URL` bilan bir xil).
-- `BACKUP_PASSPHRASE` — kamida 16 belgili uzun parol. **Uni alohida joyda (parol menejerida) saqlang** — yo'qolsa nusxani ochib bo'lmaydi.
+- `BACKUP_PASSPHRASE` — kamida 14 belgili uzun parol. **Uni alohida joyda (parol menejerida) saqlang** — yo'qolsa nusxani ochib bo'lmaydi.
 
 ## Tiklash
 ```bash

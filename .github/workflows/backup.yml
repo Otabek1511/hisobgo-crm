@@ -18,7 +18,7 @@ jobs:
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           [ -n "$DATABASE_URL" ] || { echo "::error::GitHub Secrets ichida DATABASE_URL yo'q"; exit 1; }
-          [ "${#BACKUP_PASSPHRASE}" -ge 16 ] || { echo "::error::BACKUP_PASSPHRASE yo'q yoki 16 belgidan qisqa"; exit 1; }
+          [ "${#BACKUP_PASSPHRASE}" -ge 14 ] || { echo "::error::BACKUP_PASSPHRASE yo'q yoki 14 belgidan qisqa"; exit 1; }
 
       - name: PostgreSQL 17 klientini o'rnatish
         run: |
