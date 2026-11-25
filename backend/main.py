@@ -1397,7 +1397,7 @@ def dashboard(period: str = "week", year: int | None = None, month: int | None =
 # Sotuvchi (kassir) paneli: faqat sotuv. Tannarx, foyda, mijoz telefonlari/qarzlari, xodimlar va
 # hisobotlar bu yerda YO'Q. Egasi endpointlari sotuvchi tokeni bilan 403 qaytaradi.
 # ---------------------------------------------------------------------------
-SELLER_MAX_DISCOUNT_PCT = 10
+SELLER_MAX_DISCOUNT_PCT = 30
 MAX_STAFF_PER_STORE = 20
 
 

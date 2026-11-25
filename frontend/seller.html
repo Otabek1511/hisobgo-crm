@@ -114,8 +114,8 @@
 
         <div class="flex items-center gap-2 text-xs">
           <label for="discount" class="font-semibold">Chegirma %</label>
-          <input id="discount" type="number" min="0" max="10" value="0" class="w-16 px-2 py-1.5 rounded-lg border border-slate-300 text-xs">
-          <span class="text-slate-400">(ko'pi bilan 10%)</span>
+          <input id="discount" type="number" min="0" max="30" value="0" class="w-16 px-2 py-1.5 rounded-lg border border-slate-300 text-xs">
+          <span class="text-slate-400">(ko'pi bilan 30%)</span>
         </div>
 
         <div class="pt-2 border-t border-slate-200 text-sm space-y-1">
@@ -319,7 +319,7 @@
     });
     renderCart();
   }
-  function discPct() { return Math.min(10, Math.max(0, parseInt($("discount").value, 10) || 0)); }
+  function discPct() { return Math.min(30, Math.max(0, parseInt($("discount").value, 10) || 0)); }
   function renderCart() {
     var sub = 0;
     $("cartList").innerHTML = S.cart.length ? S.cart.map(function (it) {
@@ -349,7 +349,7 @@
   $("posCat").addEventListener("change", renderPos);
   $("discount").addEventListener("input", function () {
     var v = parseInt($("discount").value, 10);
-    if (v > 10) { $("discount").value = 10; toast("Sotuvchi ko'pi bilan 10% chegirma bera oladi.", "warning"); }
+    if (v > 30) { $("discount").value = 30; toast("Sotuvchi ko'pi bilan 30% chegirma bera oladi.", "warning"); }
     renderCart();
   });
 
