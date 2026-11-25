@@ -369,7 +369,16 @@ def test_expenses_and_net_profit():
         assert len(d["series"]) == 7 and d["series"][-1]["expenses_uzs"] == 350000
         dm = c.get("/api/store/dashboard?period=month", headers=H).json()
         dy = c.get("/api/store/dashboard?period=year", headers=H).json()
-        assert len(dm["series"]) == 30 and dm["expenses_uzs"] == 350000
+        import calendar
+        from datetime import date as _d
+        t = _d.today()
+        assert len(dm["series"]) == calendar.monthrange(t.year, t.month)[1] and dm["expenses_uzs"] == 350000
+        assert dm["month"] == int(dm["series"][0]["date"][5:7]) and dm["series"][0]["date"].endswith("-01")
+        jan = c.get("/api/store/dashboard?period=month&year=2020&month=1", headers=H).json()
+        assert len(jan["series"]) == 31 and jan["expenses_uzs"] == 0
+        assert len(c.get("/api/store/dashboard?period=month&year=2024&month=2", headers=H).json()["series"]) == 29
+        assert c.get("/api/store/dashboard?period=month&month=13", headers=H).status_code == 400
+        assert c.get("/api/store/dashboard?period=month&month=0", headers=H).status_code == 400
         assert len(dy["series"]) == 12 and dy["series"][0]["date"].endswith("-01-01") and dy["expenses_uzs"] == 350000
         assert dy["year"] == int(dy["series"][0]["date"][:4])
         assert c.get("/api/store/dashboard?period=year&year=2020", headers=H).json()["expenses_uzs"] == 0

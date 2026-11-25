@@ -1291,7 +1291,7 @@ def delete_expense(expense_id: int, store: StoreTenant = Depends(current_store),
 
 
 @app.get("/api/store/dashboard")
-def dashboard(period: str = "week", year: int | None = None, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+def dashboard(period: str = "week", year: int | None = None, month: int | None = None, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
     if period not in ("week", "month", "year"):
         raise HTTPException(status_code=400, detail="Davr noto'g'ri (week, month yoki year)")
     inv_value, sku_count = db.execute(
@@ -1310,16 +1310,26 @@ def dashboard(period: str = "week", year: int | None = None, store: StoreTenant 
 
     # Davr: hafta (7 kun), oy (30 kun) yoki tanlangan kalendar yil (12 oy). Oldingi teng davr bilan solishtiriladi.
     today = datetime.now(tg.TZ).date()
-    sel_year = None
-    if period == "year":
+    sel_year = sel_month = None
+    if period in ("year", "month"):
         sel_year = year or today.year
         if not 2020 <= sel_year <= 2060:
             raise HTTPException(status_code=400, detail="Yil 2020 va 2060 oralig'ida bo'lishi kerak")
+    if period == "month":
+        sel_month = month or today.month
+        if not 1 <= sel_month <= 12:
+            raise HTTPException(status_code=400, detail="Oy 1 dan 12 gacha bo'lishi kerak")
+        cur_start = date(sel_year, sel_month, 1)
+        cur_end = date(sel_year + (sel_month == 12), sel_month % 12 + 1, 1)
+        prev_start = date(sel_year - (sel_month == 1), (sel_month - 2) % 12 + 1, 1)
+        keys = [cur_start + timedelta(days=k) for k in range((cur_end - cur_start).days)]
+        bucket = lambda d: d  # noqa: E731
+    elif period == "year":
         keys = [date(sel_year, m, 1) for m in range(1, 13)]
         cur_start, prev_start, cur_end = date(sel_year, 1, 1), date(sel_year - 1, 1, 1), date(sel_year + 1, 1, 1)
         bucket = lambda d: d.replace(day=1)  # noqa: E731
     else:
-        n = 30 if period == "month" else 7
+        n = 7
         cur_start = today - timedelta(days=n - 1)
         prev_start = cur_start - timedelta(days=n)
         keys = [cur_start + timedelta(days=k) for k in range(n)]
@@ -1365,6 +1375,7 @@ def dashboard(period: str = "week", year: int | None = None, store: StoreTenant 
     return {
         "period": period,
         "year": sel_year,
+        "month": sel_month,
         "revenue_uzs": revenue,
         "profit_uzs": profit,
         "expenses_uzs": expenses,

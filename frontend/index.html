@@ -208,7 +208,10 @@
           <button type="button" data-period="month" class="period-btn px-3.5 py-1.5 rounded-lg">Oy</button>
           <button type="button" data-period="year" class="period-btn px-3.5 py-1.5 rounded-lg">Yil</button>
         </div>
-        <select id="yearSel" aria-label="Yil" class="hidden px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-semibold"></select>
+        <div class="flex items-center gap-2">
+          <select id="monthSel" aria-label="Oy" class="hidden px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-semibold"></select>
+          <select id="yearSel" aria-label="Yil" class="hidden px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-semibold"></select>
+        </div>
         </div>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1098,13 +1101,20 @@
     // ----- Ko'rsatkichlar -----
     function dashUrl() {
       var u = "/api/store/dashboard?period=" + (S.period || "week");
-      if (S.period === "year") u += "&year=" + (S.year || new Date().getFullYear());
+      if (S.period === "year" || S.period === "month") u += "&year=" + (S.year || new Date().getFullYear());
+      if (S.period === "month") u += "&month=" + (S.month || (new Date().getMonth() + 1));
       return u;
     }
     function initPeriod() {
       var opts = "";
       for (var y = 2020; y <= 2060; y++) opts += '<option value="' + y + '">' + y + "</option>";
       $("yearSel").innerHTML = opts;
+      $("monthSel").innerHTML = ["Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr"].map(function (m, i) { return '<option value="' + (i + 1) + '">' + m + "</option>"; }).join("");
+      $("monthSel").value = String(new Date().getMonth() + 1);
+      $("monthSel").addEventListener("change", function () {
+        S.month = parseInt($("monthSel").value, 10);
+        storeApi("GET", dashUrl()).then(function (d) { S.dash = d; renderDashboard(); }).catch(fail);
+      });
       $("yearSel").value = String(new Date().getFullYear());
       $("yearSel").addEventListener("change", function () {
         S.year = parseInt($("yearSel").value, 10);
@@ -1119,13 +1129,16 @@
 
     function renderDashboard() {
       var d = S.dash; if (!d) return;
+      var MONTH_NAMES = ["Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr"];
       var PT = {
         week: ["Haftalik Savdo Tushumi", "So'nggi 7 kun, barcha to'lov turlari", "Haftalik Tushum va Sof Foyda Dinamikasi"],
-        month: ["Oylik Savdo Tushumi", "So'nggi 30 kun, barcha to'lov turlari", "Oylik Tushum va Sof Foyda Dinamikasi"],
+        month: ["Oylik Savdo Tushumi", MONTH_NAMES[(d.month || 1) - 1] + " " + d.year + ", barcha to'lov turlari", MONTH_NAMES[(d.month || 1) - 1] + " " + d.year + ": Tushum va Sof Foyda Dinamikasi"],
         year: ["Yillik Savdo Tushumi", d.year + " yil, 12 oy, barcha to'lov turlari", d.year + " yil: Tushum va Sof Foyda Dinamikasi"]
       }[d.period] || [];
-      $("yearSel").classList.toggle("hidden", d.period !== "year");
-      if (d.period === "year") $("yearSel").value = String(d.year);
+      $("yearSel").classList.toggle("hidden", d.period === "week");
+      $("monthSel").classList.toggle("hidden", d.period !== "month");
+      if (d.year) $("yearSel").value = String(d.year);
+      if (d.month) $("monthSel").value = String(d.month);
       if (PT.length) { $("dashRevTitle").textContent = PT[0]; $("dashRevHint").textContent = PT[1]; $("dashChartTitle").textContent = PT[2]; }
       document.querySelectorAll(".period-btn").forEach(function (b) {
         var on = b.getAttribute("data-period") === d.period;
