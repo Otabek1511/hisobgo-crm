@@ -86,7 +86,7 @@ def test_product_edit_delete_and_refund():
         assert prod["A1"]["stock_qty"] == 10
         cu = c.get("/api/store/customers", headers=H).json()[0]
         assert cu["debt_uzs"] == 0 and cu["total_spent_uzs"] == 0
-        assert c.get("/api/store/dashboard", headers=H).json()["week_revenue_uzs"] == 0
+        assert c.get("/api/store/dashboard", headers=H).json()["revenue_uzs"] == 0
 
         # o'chirish
         assert c.delete("/api/store/products/B2", headers=H).status_code == 200
@@ -365,7 +365,13 @@ def test_expenses_and_net_profit():
         assert c.get("/api/store/expenses?month=xx", headers=H).status_code == 400
         assert c.get("/api/store/expenses", headers=other).json()["items"] == []
         d = c.get("/api/store/dashboard", headers=H).json()
-        assert d["week_expenses_uzs"] == 350000 and d["week_net_profit_uzs"] == d["week_profit_uzs"] - 350000
+        assert d["expenses_uzs"] == 350000 and d["net_profit_uzs"] == d["profit_uzs"] - 350000
+        assert len(d["series"]) == 7 and d["series"][-1]["expenses_uzs"] == 350000
+        dm = c.get("/api/store/dashboard?period=month", headers=H).json()
+        dy = c.get("/api/store/dashboard?period=year", headers=H).json()
+        assert len(dm["series"]) == 30 and dm["expenses_uzs"] == 350000
+        assert len(dy["series"]) == 12 and dy["series"][-1]["date"].endswith("-01") and dy["expenses_uzs"] == 350000
+        assert c.get("/api/store/dashboard?period=decade", headers=H).status_code == 400
         assert c.delete(f"/api/store/expenses/{r.json()['id']}", headers=other).status_code == 404
         assert c.delete(f"/api/store/expenses/{r.json()['id']}", headers=H).status_code == 200
         c.delete("/api/superadmin/stores/exp1", headers=SA)

@@ -1291,7 +1291,9 @@ def delete_expense(expense_id: int, store: StoreTenant = Depends(current_store),
 
 
 @app.get("/api/store/dashboard")
-def dashboard(store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+def dashboard(period: str = "week", store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+    if period not in ("week", "month", "year"):
+        raise HTTPException(status_code=400, detail="Davr noto'g'ri (week, month yoki year)")
     inv_value, sku_count = db.execute(
         select(func.coalesce(func.sum(Product.price_uzs * Product.stock_qty), 0), func.count(Product.id)).where(Product.store_id == store.id)
     ).one()
@@ -1306,29 +1308,47 @@ def dashboard(store: StoreTenant = Depends(current_store), db: Session = Depends
         select(Product).where(Product.store_id == store.id, Product.stock_qty <= 10).order_by(Product.stock_qty, Product.name).limit(50)
     ).all()
 
-    # So'nggi 14 kun (Toshkent kunlari): 7 kunlik grafik + oldingi hafta bilan solishtirish
+    # Davr: hafta (7 kun), oy (30 kun), yil (12 kalendar oy). Oldingi teng davr bilan solishtiriladi.
     today = datetime.now(tg.TZ).date()
-    first_day = today - timedelta(days=13)
-    since = datetime.combine(first_day, datetime.min.time(), tzinfo=tg.TZ).astimezone(timezone.utc)
-    recent = db.scalars(select(SaleReceipt).where(SaleReceipt.store_id == store.id, SaleReceipt.created_at >= since, SaleReceipt.refunded_at.is_(None))).all()
-    per_day: dict[date, list[int]] = {}
-    for r in recent:
-        d = _aware(r.created_at).astimezone(tg.TZ).date()
-        cell = per_day.setdefault(d, [0, 0])
-        cell[0] += r.total_uzs
-        cell[1] += r.profit_uzs
-    weekly = []
-    for k in range(6, -1, -1):
-        d = today - timedelta(days=k)
-        rev, prof = per_day.get(d, [0, 0])
-        weekly.append({"date": d.isoformat(), "revenue_uzs": rev, "profit_uzs": prof})
-    week_revenue = sum(x["revenue_uzs"] for x in weekly)
-    week_profit = sum(x["profit_uzs"] for x in weekly)
-    prev_week_revenue = sum(per_day.get(today - timedelta(days=k), [0, 0])[0] for k in range(7, 14))
-    week_expenses = int(db.scalar(
-        select(func.coalesce(func.sum(Expense.amount_uzs), 0))
-        .where(Expense.store_id == store.id, Expense.spent_on >= today - timedelta(days=6), Expense.spent_on <= today)
-    ) or 0)
+    if period == "year":
+        def _m(k: int) -> date:  # k oy oldingi oyning 1-kuni
+            idx = today.year * 12 + (today.month - 1) - k
+            return date(idx // 12, idx % 12 + 1, 1)
+        keys = [_m(k) for k in range(11, -1, -1)]
+        cur_start, prev_start = keys[0], _m(23)
+        bucket = lambda d: d.replace(day=1)  # noqa: E731
+    else:
+        n = 30 if period == "month" else 7
+        cur_start = today - timedelta(days=n - 1)
+        prev_start = cur_start - timedelta(days=n)
+        keys = [cur_start + timedelta(days=k) for k in range(n)]
+        bucket = lambda d: d  # noqa: E731
+    since = datetime.combine(prev_start, datetime.min.time(), tzinfo=tg.TZ).astimezone(timezone.utc)
+    cur: dict[date, list[int]] = {k: [0, 0, 0] for k in keys}
+    prev_revenue = 0
+    for created, total, prof in db.execute(
+        select(SaleReceipt.created_at, SaleReceipt.total_uzs, SaleReceipt.profit_uzs)
+        .where(SaleReceipt.store_id == store.id, SaleReceipt.created_at >= since, SaleReceipt.refunded_at.is_(None))
+    ).all():
+        d = _aware(created).astimezone(tg.TZ).date()
+        if d >= cur_start:
+            cell = cur.get(bucket(d))
+            if cell is not None:
+                cell[0] += total
+                cell[1] += prof
+        else:
+            prev_revenue += total
+    for spent_on, amount in db.execute(
+        select(Expense.spent_on, Expense.amount_uzs)
+        .where(Expense.store_id == store.id, Expense.spent_on >= cur_start, Expense.spent_on <= today)
+    ).all():
+        cell = cur.get(bucket(spent_on))
+        if cell is not None:
+            cell[2] += amount
+    series = [{"date": k.isoformat(), "revenue_uzs": v[0], "profit_uzs": v[1], "expenses_uzs": v[2]} for k, v in cur.items()]
+    revenue = sum(x["revenue_uzs"] for x in series)
+    profit = sum(x["profit_uzs"] for x in series)
+    expenses = sum(x["expenses_uzs"] for x in series)
 
     # Jami to'lov turlari bo'yicha (butun tarix)
     by_method: dict[str, int] = {}
@@ -1340,13 +1360,14 @@ def dashboard(store: StoreTenant = Depends(current_store), db: Session = Depends
         by_method[method] = int(total or 0)
 
     return {
-        "week_revenue_uzs": week_revenue,
-        "week_profit_uzs": week_profit,
-        "week_expenses_uzs": week_expenses,
-        "week_net_profit_uzs": week_profit - week_expenses,
-        "prev_week_revenue_uzs": prev_week_revenue,
-        "margin_pct": round(week_profit * 100 / week_revenue, 1) if week_revenue else 0,
-        "weekly": weekly,
+        "period": period,
+        "revenue_uzs": revenue,
+        "profit_uzs": profit,
+        "expenses_uzs": expenses,
+        "net_profit_uzs": profit - expenses,
+        "prev_revenue_uzs": prev_revenue,
+        "margin_pct": round(profit * 100 / revenue, 1) if revenue else 0,
+        "series": series,
         "by_method": by_method,
         "inventory_value_uzs": int(inv_value),
         "sku_count": int(sku_count),
