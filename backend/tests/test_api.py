@@ -370,7 +370,11 @@ def test_expenses_and_net_profit():
         dm = c.get("/api/store/dashboard?period=month", headers=H).json()
         dy = c.get("/api/store/dashboard?period=year", headers=H).json()
         assert len(dm["series"]) == 30 and dm["expenses_uzs"] == 350000
-        assert len(dy["series"]) == 12 and dy["series"][-1]["date"].endswith("-01") and dy["expenses_uzs"] == 350000
+        assert len(dy["series"]) == 12 and dy["series"][0]["date"].endswith("-01-01") and dy["expenses_uzs"] == 350000
+        assert dy["year"] == int(dy["series"][0]["date"][:4])
+        assert c.get("/api/store/dashboard?period=year&year=2020", headers=H).json()["expenses_uzs"] == 0
+        assert c.get("/api/store/dashboard?period=year&year=2061", headers=H).status_code == 400
+        assert c.get("/api/store/dashboard?period=year&year=2019", headers=H).status_code == 400
         assert c.get("/api/store/dashboard?period=decade", headers=H).status_code == 400
         assert c.delete(f"/api/store/expenses/{r.json()['id']}", headers=other).status_code == 404
         assert c.delete(f"/api/store/expenses/{r.json()['id']}", headers=H).status_code == 200

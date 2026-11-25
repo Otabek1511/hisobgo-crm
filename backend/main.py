@@ -1291,7 +1291,7 @@ def delete_expense(expense_id: int, store: StoreTenant = Depends(current_store),
 
 
 @app.get("/api/store/dashboard")
-def dashboard(period: str = "week", store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
+def dashboard(period: str = "week", year: int | None = None, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)):
     if period not in ("week", "month", "year"):
         raise HTTPException(status_code=400, detail="Davr noto'g'ri (week, month yoki year)")
     inv_value, sku_count = db.execute(
@@ -1308,27 +1308,30 @@ def dashboard(period: str = "week", store: StoreTenant = Depends(current_store),
         select(Product).where(Product.store_id == store.id, Product.stock_qty <= 10).order_by(Product.stock_qty, Product.name).limit(50)
     ).all()
 
-    # Davr: hafta (7 kun), oy (30 kun), yil (12 kalendar oy). Oldingi teng davr bilan solishtiriladi.
+    # Davr: hafta (7 kun), oy (30 kun) yoki tanlangan kalendar yil (12 oy). Oldingi teng davr bilan solishtiriladi.
     today = datetime.now(tg.TZ).date()
+    sel_year = None
     if period == "year":
-        def _m(k: int) -> date:  # k oy oldingi oyning 1-kuni
-            idx = today.year * 12 + (today.month - 1) - k
-            return date(idx // 12, idx % 12 + 1, 1)
-        keys = [_m(k) for k in range(11, -1, -1)]
-        cur_start, prev_start = keys[0], _m(23)
+        sel_year = year or today.year
+        if not 2020 <= sel_year <= 2060:
+            raise HTTPException(status_code=400, detail="Yil 2020 va 2060 oralig'ida bo'lishi kerak")
+        keys = [date(sel_year, m, 1) for m in range(1, 13)]
+        cur_start, prev_start, cur_end = date(sel_year, 1, 1), date(sel_year - 1, 1, 1), date(sel_year + 1, 1, 1)
         bucket = lambda d: d.replace(day=1)  # noqa: E731
     else:
         n = 30 if period == "month" else 7
         cur_start = today - timedelta(days=n - 1)
         prev_start = cur_start - timedelta(days=n)
         keys = [cur_start + timedelta(days=k) for k in range(n)]
+        cur_end = today + timedelta(days=1)
         bucket = lambda d: d  # noqa: E731
+    until = datetime.combine(cur_end, datetime.min.time(), tzinfo=tg.TZ).astimezone(timezone.utc)
     since = datetime.combine(prev_start, datetime.min.time(), tzinfo=tg.TZ).astimezone(timezone.utc)
     cur: dict[date, list[int]] = {k: [0, 0, 0] for k in keys}
     prev_revenue = 0
     for created, total, prof in db.execute(
         select(SaleReceipt.created_at, SaleReceipt.total_uzs, SaleReceipt.profit_uzs)
-        .where(SaleReceipt.store_id == store.id, SaleReceipt.created_at >= since, SaleReceipt.refunded_at.is_(None))
+        .where(SaleReceipt.store_id == store.id, SaleReceipt.created_at >= since, SaleReceipt.created_at < until, SaleReceipt.refunded_at.is_(None))
     ).all():
         d = _aware(created).astimezone(tg.TZ).date()
         if d >= cur_start:
@@ -1340,7 +1343,7 @@ def dashboard(period: str = "week", store: StoreTenant = Depends(current_store),
             prev_revenue += total
     for spent_on, amount in db.execute(
         select(Expense.spent_on, Expense.amount_uzs)
-        .where(Expense.store_id == store.id, Expense.spent_on >= cur_start, Expense.spent_on <= today)
+        .where(Expense.store_id == store.id, Expense.spent_on >= cur_start, Expense.spent_on < cur_end)
     ).all():
         cell = cur.get(bucket(spent_on))
         if cell is not None:
@@ -1361,6 +1364,7 @@ def dashboard(period: str = "week", store: StoreTenant = Depends(current_store),
 
     return {
         "period": period,
+        "year": sel_year,
         "revenue_uzs": revenue,
         "profit_uzs": profit,
         "expenses_uzs": expenses,

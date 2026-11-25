@@ -202,10 +202,13 @@
     <section id="tabDashboard" class="space-y-6">
       <div class="flex items-center justify-between gap-3">
         <h2 class="font-bold text-sm text-slate-700">Ko'rsatkichlar davri</h2>
+        <div class="flex flex-col items-end gap-2">
         <div id="periodBtns" class="inline-flex rounded-xl border border-slate-300 bg-white p-0.5 text-xs font-semibold">
           <button type="button" data-period="week" class="period-btn px-3.5 py-1.5 rounded-lg">Hafta</button>
           <button type="button" data-period="month" class="period-btn px-3.5 py-1.5 rounded-lg">Oy</button>
           <button type="button" data-period="year" class="period-btn px-3.5 py-1.5 rounded-lg">Yil</button>
+        </div>
+        <select id="yearSel" aria-label="Yil" class="hidden px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-semibold"></select>
         </div>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1093,8 +1096,20 @@
     function renderAll() { renderDashboard(); renderPos(); renderInventory(); renderCustomers(); renderEmployees(); renderReceipts(); }
 
     // ----- Ko'rsatkichlar -----
-    function dashUrl() { return "/api/store/dashboard?period=" + (S.period || "week"); }
+    function dashUrl() {
+      var u = "/api/store/dashboard?period=" + (S.period || "week");
+      if (S.period === "year") u += "&year=" + (S.year || new Date().getFullYear());
+      return u;
+    }
     function initPeriod() {
+      var opts = "";
+      for (var y = 2020; y <= 2060; y++) opts += '<option value="' + y + '">' + y + "</option>";
+      $("yearSel").innerHTML = opts;
+      $("yearSel").value = String(new Date().getFullYear());
+      $("yearSel").addEventListener("change", function () {
+        S.year = parseInt($("yearSel").value, 10);
+        storeApi("GET", dashUrl()).then(function (d) { S.dash = d; renderDashboard(); }).catch(fail);
+      });
       $("periodBtns").addEventListener("click", function (e) {
         var b = e.target.closest("[data-period]"); if (!b || b.getAttribute("data-period") === S.period) return;
         S.period = b.getAttribute("data-period");
@@ -1107,8 +1122,10 @@
       var PT = {
         week: ["Haftalik Savdo Tushumi", "So'nggi 7 kun, barcha to'lov turlari", "Haftalik Tushum va Sof Foyda Dinamikasi"],
         month: ["Oylik Savdo Tushumi", "So'nggi 30 kun, barcha to'lov turlari", "Oylik Tushum va Sof Foyda Dinamikasi"],
-        year: ["Yillik Savdo Tushumi", "So'nggi 12 oy, barcha to'lov turlari", "Yillik Tushum va Sof Foyda Dinamikasi"]
+        year: ["Yillik Savdo Tushumi", d.year + " yil, 12 oy, barcha to'lov turlari", d.year + " yil: Tushum va Sof Foyda Dinamikasi"]
       }[d.period] || [];
+      $("yearSel").classList.toggle("hidden", d.period !== "year");
+      if (d.period === "year") $("yearSel").value = String(d.year);
       if (PT.length) { $("dashRevTitle").textContent = PT[0]; $("dashRevHint").textContent = PT[1]; $("dashChartTitle").textContent = PT[2]; }
       document.querySelectorAll(".period-btn").forEach(function (b) {
         var on = b.getAttribute("data-period") === d.period;
