@@ -1312,11 +1312,11 @@ def dashboard(period: str = "week", year: int | None = None, month: int | None =
     today = datetime.now(tg.TZ).date()
     sel_year = sel_month = None
     if period in ("year", "month"):
-        sel_year = year or today.year
+        sel_year = year if year is not None else today.year
         if not 2020 <= sel_year <= 2060:
             raise HTTPException(status_code=400, detail="Yil 2020 va 2060 oralig'ida bo'lishi kerak")
     if period == "month":
-        sel_month = month or today.month
+        sel_month = month if month is not None else today.month
         if not 1 <= sel_month <= 12:
             raise HTTPException(status_code=400, detail="Oy 1 dan 12 gacha bo'lishi kerak")
         cur_start = date(sel_year, sel_month, 1)
