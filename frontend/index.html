@@ -302,7 +302,7 @@
         <div class="pt-3 border-t border-slate-200 space-y-3">
           <div class="flex items-center justify-between">
             <label for="posDiscountInput" class="text-xs font-semibold text-slate-600">Chegirma (%):</label>
-            <input id="posDiscountInput" type="number" min="0" max="50" value="0" class="w-20 px-2.5 py-1.5 rounded-lg border border-slate-300 text-right text-sm font-bold">
+            <input id="posDiscountInput" type="number" min="0" max="100" value="0" class="w-20 px-2.5 py-1.5 rounded-lg border border-slate-300 text-right text-sm font-bold">
           </div>
           <div class="bg-slate-50 rounded-xl p-3 space-y-1 text-xs border border-slate-200/70">
             <div class="flex justify-between text-slate-600"><span>Jami summa:</span><span id="posSubtotalVal" class="font-semibold">0 so'm</span></div>
@@ -543,7 +543,7 @@
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 class="font-bold text-sm">Sotuvchilar</h3>
-            <p class="text-xs text-slate-500 mt-1">Sotuvchi faqat kassada ishlaydi: foyda, zarar, mijozlar ro'yxati, xodimlar va qaytarishni ko'ra olmaydi. Chegirma ko'pi bilan 30%.</p>
+            <p class="text-xs text-slate-500 mt-1">Sotuvchi faqat kassada ishlaydi: foyda, zarar, mijozlar ro'yxati, xodimlar va qaytarishni ko'ra olmaydi. Har bir sotuvchining chegirma chegarasini o'zingiz belgilaysiz.</p>
           </div>
           <div class="flex items-center gap-2">
             <button id="btnCopyLink" type="button" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold">Sotuvchi paneli havolasi</button>
@@ -554,7 +554,7 @@
       </div>
       <div class="bg-white rounded-2xl border border-slate-200 overflow-x-auto">
         <table class="w-full text-xs">
-          <thead><tr class="text-left text-slate-500 border-b bg-slate-50"><th class="py-3 px-4">Ism</th><th class="px-4">Login</th><th class="px-4">Holat</th><th class="px-4 text-right">Bugun</th><th class="px-4">Oxirgi kirish</th><th class="px-4 text-right">Amal</th></tr></thead>
+          <thead><tr class="text-left text-slate-500 border-b bg-slate-50"><th class="py-3 px-4">Ism</th><th class="px-4">Login</th><th class="px-4">Holat</th><th class="px-4 text-right">Bugun</th><th class="px-4 text-right">Chegirma (%)</th><th class="px-4">Oxirgi kirish</th><th class="px-4 text-right">Amal</th></tr></thead>
           <tbody id="staffRows"></tbody>
         </table>
       </div>
@@ -566,6 +566,7 @@
         <form id="formStaff" class="space-y-3">
           <h3 class="font-bold text-sm">Yangi sotuvchi</h3>
           <input id="stName" type="text" required minlength="2" placeholder="Ism familiya" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          <input id="stDisc" type="number" min="0" max="100" step="1" value="10" required placeholder="Chegirma chegarasi, %" title="Sotuvchi bera oladigan eng katta chegirma (%)" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
           <input id="stLogin" type="text" required pattern="[A-Za-z0-9_.\-]{3,64}" autocapitalize="none" placeholder="Login (lotin harf, raqam, 3+ belgi)" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
           <div class="grid grid-cols-2 gap-2">
             <button type="submit" class="py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold">Yaratish</button>
@@ -1011,9 +1012,9 @@
           return '<tr class="border-b border-slate-100"><td class="py-3 px-4 font-semibold">' + esc(s.full_name) + '</td><td class="px-4 font-mono-code">' + esc(s.login) + '</td><td class="px-4">' +
             (s.active ? '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">Faol</span>' : '<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-700 font-semibold">Bloklangan</span>') +
             (s.must_change_password ? ' <span class="text-amber-600">(parol o\'rnatilmagan)</span>' : "") +
-            '</td><td class="px-4 text-right">' + esc(s.today_count) + " ta • " + uzs(s.today_total_uzs) + '</td><td class="px-4 text-slate-500">' + (s.last_login_at ? esc(fmtTime(s.last_login_at)) : "—") +
+            '</td><td class="px-4 text-right">' + esc(s.today_count) + " ta • " + uzs(s.today_total_uzs) + '</td><td class="px-4 text-right"><input type="number" min="0" max="100" step="1" value="' + esc(s.max_discount_pct) + '" data-st-disc="' + esc(s.id) + '" aria-label="Chegirma chegarasi" class="w-16 px-2 py-1 rounded-lg border border-slate-300 text-right text-xs font-bold"></td><td class="px-4 text-slate-500">' + (s.last_login_at ? esc(fmtTime(s.last_login_at)) : "—") +
             '</td><td class="px-4 py-2 text-right whitespace-nowrap"><button type="button" data-st-reset="' + esc(s.id) + '" class="px-2 py-1 rounded-lg bg-slate-100 font-semibold">Yangi parol</button> <button type="button" data-st-toggle="' + esc(s.id) + '" class="px-2 py-1 rounded-lg bg-amber-50 text-amber-800 font-semibold">' + (s.active ? "Bloklash" : "Faollashtirish") + '</button> <button type="button" data-st-del="' + esc(s.id) + '" class="px-2 py-1 rounded-lg bg-rose-50 text-rose-700 font-semibold">O\'chirish</button></td></tr>';
-        }).join("") : '<tr><td colspan="6" class="py-8 text-center text-slate-400">Hozircha sotuvchilar yo\'q.</td></tr>';
+        }).join("") : '<tr><td colspan="7" class="py-8 text-center text-slate-400">Hozircha sotuvchilar yo\'q.</td></tr>';
       }).catch(function () {});
     }
     function showCred(st, otp) {
@@ -1022,7 +1023,7 @@
       modal("modalStaffCred", true);
     }
     function initStaff() {
-      $("btnAddStaff").addEventListener("click", function () { $("stName").value = ""; $("stLogin").value = ""; modal("modalStaff", true); });
+      $("btnAddStaff").addEventListener("click", function () { $("stName").value = ""; $("stLogin").value = ""; $("stDisc").value = "10"; modal("modalStaff", true); });
       $("btnCopyLink").addEventListener("click", function () {
         copyText(sellerLink()).then(function () { toast("Havola nusxalandi."); }, function () { toast(sellerLink(), "warning"); });
       });
@@ -1031,9 +1032,16 @@
       });
       $("formStaff").addEventListener("submit", function (e) {
         e.preventDefault();
-        storeApi("POST", "/api/store/staff", { full_name: $("stName").value.trim(), login: $("stLogin").value.trim() }).then(function (r) {
+        storeApi("POST", "/api/store/staff", { full_name: $("stName").value.trim(), login: $("stLogin").value.trim(), max_discount_pct: Math.min(100, Math.max(0, parseInt($("stDisc").value, 10) || 0)) }).then(function (r) {
           modal("modalStaff", false); loadStaff(); showCred(r, r.one_time_password);
         }).catch(fail);
+      });
+      $("staffRows").addEventListener("change", function (e) {
+        var inp = e.target.closest("[data-st-disc]"); if (!inp) return;
+        var v = Math.min(100, Math.max(0, parseInt(inp.value, 10) || 0));
+        inp.value = v;
+        storeApi("PATCH", "/api/store/staff/" + inp.getAttribute("data-st-disc"), { max_discount_pct: v })
+          .then(function () { toast("Chegirma chegarasi: " + v + "%", "info"); loadStaff(); }).catch(function (err) { fail(err); loadStaff(); });
       });
       $("staffRows").addEventListener("click", function (e) {
         var rs = e.target.closest("[data-st-reset]"), tg = e.target.closest("[data-st-toggle]"), dl = e.target.closest("[data-st-del]");
@@ -1237,7 +1245,7 @@
         sub += p.price_uzs * it.qty;
         return '<div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs"><div><div class="font-bold text-slate-900">' + esc(p.name) + '</div><div class="text-slate-500">' + uzs(p.price_uzs) + " × " + it.qty + '</div></div><div class="flex items-center gap-1"><button type="button" data-dec="' + esc(p.sku) + '" class="w-6 h-6 rounded bg-slate-200 font-bold">-</button><span class="w-5 text-center font-bold">' + it.qty + '</span><button type="button" data-inc="' + esc(p.sku) + '" class="w-6 h-6 rounded bg-indigo-100 text-indigo-800 font-bold">+</button></div></div>';
       }).join("") : '<div class="py-6 text-center text-xs text-slate-400">Savat bo\'sh</div>';
-      var pct = Math.min(50, Math.max(0, parseInt($("posDiscountInput").value, 10) || 0));
+      var pct = Math.min(100, Math.max(0, parseInt($("posDiscountInput").value, 10) || 0));
       var disc = Math.floor(sub * pct / 100);
       $("posSubtotalVal").textContent = uzs(sub);
       $("posDiscountVal").textContent = "-" + uzs(disc);
@@ -1260,7 +1268,7 @@
       if (!S.cart.length) { toast("Savat bo'sh!", "error"); return; }
       var cid = $("posCustomerSelect").value;
       if (S.pay === "Nasiya" && !cid) { toast("Nasiya uchun mijozni tanlang.", "warning"); return; }
-      var pct = Math.min(50, Math.max(0, parseInt($("posDiscountInput").value, 10) || 0));
+      var pct = Math.min(100, Math.max(0, parseInt($("posDiscountInput").value, 10) || 0));
       var cartSnap = S.cart.map(function (i) {
         var p = S.products.filter(function (x) { return x.sku === i.sku; })[0] || {};
         return { name: p.name || i.sku, qty: i.qty, price: p.price_uzs || 0 };

@@ -244,7 +244,17 @@ def test_seller_role_isolation():
 
         # sotuv: javobda foyda yo'q, chegirma cheklangan
         body = {"items": [{"sku": "A1", "qty": 2}], "payment_method": "Naqd", "customer_id": cust["id"]}
-        assert c.post("/api/seller/sales", headers=S, json={**body, "discount_pct": 31}).status_code == 400
+        assert c.post("/api/seller/sales", headers=S, json={**body, "discount_pct": 11}).status_code == 400   # boshlang'ich chegara 10%
+        assert staff["max_discount_pct"] == 10 and c.get("/api/seller/me", headers=S).json()["max_discount_pct"] == 10
+        # egasi chegarani o'zgartiradi; sotuvchi o'zi o'zgartira olmaydi
+        assert c.patch(f"/api/store/staff/{staff['id']}", headers=S, json={"max_discount_pct": 90}).status_code == 403
+        assert c.patch(f"/api/store/staff/{staff['id']}", headers=H, json={}).status_code == 400
+        assert c.patch(f"/api/store/staff/{staff['id']}", headers=H, json={"max_discount_pct": 101}).status_code == 422
+        up = c.patch(f"/api/store/staff/{staff['id']}", headers=H, json={"max_discount_pct": 25})
+        assert up.status_code == 200 and up.json()["max_discount_pct"] == 25 and up.json()["active"] is True
+        assert c.get("/api/seller/me", headers=S).json()["max_discount_pct"] == 25
+        assert c.post("/api/seller/sales", headers=S, json={**body, "discount_pct": 26}).status_code == 400
+        c.patch(f"/api/store/staff/{staff['id']}", headers=H, json={"max_discount_pct": 10})
         r = c.post("/api/seller/sales", headers={**S, "Idempotency-Key": "s-1"}, json=body)
         assert r.status_code == 201, r.text
         assert "profit_uzs" not in r.json() and r.json()["total_uzs"] == 2000 and r.json()["seller_name"] == "Karim Kassir"

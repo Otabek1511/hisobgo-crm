@@ -33,7 +33,7 @@ docker compose up --build
 ## Rollar: do'kon egasi va sotuvchi
 
 - **Do'kon egasi** (`index.html`) — to'liq huquq. «Sotuvchilar» bo'limida sotuvchi yaratadi (login + bir martalik parol), parolni tiklaydi, bloklaydi yoki o'chiradi.
-- **Sotuvchi** (`seller.html`) — faqat kassa: tovar (tannarxsiz), sotuv (chegirma ≤ 30%), mijozni qidirish/qo'shish (ro'yxat va telefon ochilmaydi), o'z cheklari. Foyda/zarar, mijozlar, xodimlar, qaytarish va eksport — yopiq.
+- **Sotuvchi** (`seller.html`) — faqat kassa: tovar (tannarxsiz), sotuv (chegirma egasi belgilagan chegaradan oshmaydi (har bir sotuvchiga alohida, boshlang'ich 10%)), mijozni qidirish/qo'shish (ro'yxat va telefon ochilmaydi), o'z cheklari. Foyda/zarar, mijozlar, xodimlar, qaytarish va eksport — yopiq.
 - `/api/seller/*` faqat sotuvchi tokeniga, `/api/store/*` faqat egasi tokeniga ochiq. Sotuvchi bloklanganda yoki paroli tiklanganda sessiyasi darhol tugaydi.
 
 ## API qisqacha

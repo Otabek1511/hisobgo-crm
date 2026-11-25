@@ -59,6 +59,7 @@ _DUMMY_HASH = pwd_hasher.hash("dummy-password-for-timing")  # mavjud bo'lmagan l
 
 
 _MIGRATIONS = [
+    "ALTER TABLE staff_users ADD COLUMN IF NOT EXISTS max_discount_pct INTEGER NOT NULL DEFAULT 10",
     "ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS customer_id INTEGER",
     "ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ",
     "ALTER TABLE sale_receipts ADD COLUMN IF NOT EXISTS refunded_uzs BIGINT NOT NULL DEFAULT 0",
@@ -236,7 +237,7 @@ class SaleItemIn(BaseModel):
 class SaleRequest(BaseModel):
     items: list[SaleItemIn] = Field(min_length=1, max_length=200)
     payment_method: Literal["Naqd", "Uzcard/Humo", "Click/Payme", "Nasiya"]
-    discount_pct: int = Field(default=0, ge=0, le=50)
+    discount_pct: int = Field(default=0, ge=0, le=100)
     customer_id: int | None = None
 
 
@@ -1397,7 +1398,7 @@ def dashboard(period: str = "week", year: int | None = None, month: int | None =
 # Sotuvchi (kassir) paneli: faqat sotuv. Tannarx, foyda, mijoz telefonlari/qarzlari, xodimlar va
 # hisobotlar bu yerda YO'Q. Egasi endpointlari sotuvchi tokeni bilan 403 qaytaradi.
 # ---------------------------------------------------------------------------
-SELLER_MAX_DISCOUNT_PCT = 30
+SELLER_DEFAULT_DISCOUNT_PCT = 10  # yangi sotuvchi uchun boshlang'ich chegara; egasi har bir sotuvchiga o'zi belgilaydi
 MAX_STAFF_PER_STORE = 20
 
 
@@ -1416,7 +1417,10 @@ def seller_receipt_out(r: SaleReceipt) -> dict:
 @app.get("/api/seller/me")
 def seller_me(ctx: tuple[StoreTenant, StaffUser] = Depends(current_seller)):
     store, staff = ctx
-    return {"full_name": staff.full_name, "login": staff.login, "role": "seller", "store_name": store.name}
+    return {
+        "full_name": staff.full_name, "login": staff.login, "role": "seller", "store_name": store.name,
+        "max_discount_pct": staff.max_discount_pct,
+    }
 
 
 @app.get("/api/seller/products")
@@ -1473,8 +1477,9 @@ def seller_create_sale(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=64),
 ):
     store, staff = ctx
-    if payload.discount_pct > SELLER_MAX_DISCOUNT_PCT:
-        raise HTTPException(status_code=400, detail=f"Sotuvchi ko'pi bilan {SELLER_MAX_DISCOUNT_PCT}% chegirma bera oladi")
+    limit = staff.max_discount_pct
+    if payload.discount_pct > limit:
+        raise HTTPException(status_code=400, detail=f"Sizga ko'pi bilan {limit}% chegirma berish ruxsat etilgan")
     return seller_receipt_out(_make_sale(db, store, payload, background, idempotency_key, staff))
 
 
@@ -1529,16 +1534,19 @@ def seller_logout(ctx: tuple[StoreTenant, StaffUser] = Depends(current_seller), 
 class StaffCreate(BaseModel):
     full_name: str = Field(min_length=2, max_length=120)
     login: str = Field(pattern=r"^[A-Za-z0-9_.-]{3,64}$")
+    max_discount_pct: int = Field(default=SELLER_DEFAULT_DISCOUNT_PCT, ge=0, le=100)
 
 
-class StaffActive(BaseModel):
-    active: bool
+class StaffUpdate(BaseModel):
+    active: bool | None = None
+    max_discount_pct: int | None = Field(default=None, ge=0, le=100)
 
 
 def staff_out(st: StaffUser, today: dict | None = None) -> dict:
     t = (today or {}).get(st.id, (0, 0))
     return {
         "id": st.id, "full_name": st.full_name, "login": st.login, "active": st.active,
+        "max_discount_pct": st.max_discount_pct,
         "must_change_password": st.must_change_password, "created_at": st.created_at,
         "last_login_at": st.last_login_at, "today_count": int(t[0]), "today_total_uzs": int(t[1]),
     }
@@ -1574,7 +1582,8 @@ def create_staff(payload: StaffCreate, store: StoreTenant = Depends(current_stor
     if find_account(db, login_key):
         raise HTTPException(status_code=409, detail="Ushbu login band. Boshqa login tanlang")
     otp = generate_one_time_password()
-    st = StaffUser(store_id=store.id, login=login_key, full_name=payload.full_name.strip(), password_hash=pwd_hasher.hash(otp))
+    st = StaffUser(store_id=store.id, login=login_key, full_name=payload.full_name.strip(), password_hash=pwd_hasher.hash(otp),
+                   max_discount_pct=payload.max_discount_pct)
     db.add(st)
     audit(db, store.login, "CREATE_SELLER", f"{st.full_name} ({login_key})")
     try:
@@ -1600,14 +1609,20 @@ def reset_staff_password(staff_id: int, store: StoreTenant = Depends(current_sto
 
 
 @app.patch("/api/store/staff/{staff_id}")
-def set_staff_active(
-    staff_id: int, payload: StaffActive, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)
+def update_staff(
+    staff_id: int, payload: StaffUpdate, store: StoreTenant = Depends(current_store), db: Session = Depends(get_db)
 ):
+    if payload.active is None and payload.max_discount_pct is None:
+        raise HTTPException(status_code=400, detail="O'zgartiriladigan maydon ko'rsatilmagan")
     st = _staff_for(db, store, staff_id)
-    st.active = payload.active
-    if not payload.active:
-        st.token_version = (st.token_version or 0) + 1  # ochiq sessiyalar darhol yopiladi
-    audit(db, store.login, "SELLER_ACTIVE" if payload.active else "SELLER_BLOCKED", f"{st.full_name} ({st.login})")
+    if payload.active is not None:
+        st.active = payload.active
+        if not payload.active:
+            st.token_version = (st.token_version or 0) + 1  # ochiq sessiyalar darhol yopiladi
+        audit(db, store.login, "SELLER_ACTIVE" if payload.active else "SELLER_BLOCKED", f"{st.full_name} ({st.login})")
+    if payload.max_discount_pct is not None:
+        st.max_discount_pct = payload.max_discount_pct
+        audit(db, store.login, "SELLER_DISCOUNT", f"{st.full_name} ({st.login}): {payload.max_discount_pct}%")
     db.commit()
     return staff_out(st)
 
